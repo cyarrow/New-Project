@@ -1,0 +1,448 @@
+/* 牌桌：深色石板桌面，手牌是淺色的石紙卡面，場上隨從是嵌在桌面上的深色牌片。
+   刻意只做深色單一主題（遊戲桌面），所有顏色都在 :root 定義。 */
+:root {
+  color-scheme: dark;
+  --table: #0e181d;
+  --table-hi: #15232a;
+  --lane: #122027;
+  --tile: #1b2c34;
+  --line: #263a44;
+  --ink: #e4ecee;
+  --ink-dim: #8ea2aa;
+  --card: #dde4e5;
+  --card-ink: #162025;
+  --card-dim: #51636a;
+  --gold: #e6b84a;
+  --hp: #e05a4c;
+  --heal: #6fcf97;
+  --focus: #8fd6ff;
+  --fire: #e2603f;
+  --water: #3d94d8;
+  --wind: #45b386;
+  --earth: #b9874f;
+  --neutral: #8f9ba3;
+
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-num: "Chakra Petch", "Noto Sans TC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at 50% 40%, var(--table-hi), var(--table) 70%) fixed, var(--table);
+  color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+h1, h2 { text-wrap: balance; margin: 0; }
+.muted { color: var(--ink-dim); }
+
+.el-fire { --el: var(--fire); }
+.el-water { --el: var(--water); }
+.el-wind { --el: var(--wind); }
+.el-earth { --el: var(--earth); }
+.el-neutral { --el: var(--neutral); }
+
+/* ── 按鈕 ── */
+.btn {
+  border: 1px solid var(--line);
+  background: var(--tile);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.btn.primary { background: var(--gold); border-color: var(--gold); color: var(--card-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; }
+.btn.big { font-size: 1.1rem; padding: 12px 36px; }
+.link { background: none; border: 0; color: var(--ink-dim); text-decoration: underline; padding: 0; }
+.chip {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--el);
+  color: var(--el);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+/* ── 開始畫面 ── */
+.setup {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-block: 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+.logo {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2.6rem, 9vw, 4.4rem);
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  background: linear-gradient(100deg, var(--fire), var(--gold) 30%, var(--wind) 55%, var(--water) 80%, var(--earth));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.tagline { margin: 0; color: var(--ink-dim); max-width: 36em; }
+.seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; width: 100%; }
+.seat {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--lane);
+  padding: 12px 16px 16px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.seat legend { padding: 0 6px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold); }
+.field-label { font-size: 0.85rem; color: var(--ink-dim); }
+.seat input[type="text"] {
+  background: var(--table);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.deck-opts { display: flex; flex-direction: column; gap: 6px; }
+.deck-opt { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; }
+.deck-opt:has(input:checked) { border-color: var(--gold); background: var(--tile); }
+.deck-opt span { display: flex; flex-direction: column; }
+.deck-opt small { color: var(--ink-dim); }
+.check { display: flex; gap: 8px; align-items: center; color: var(--ink-dim); }
+.rules { width: 100%; border-top: 1px solid var(--line); padding-top: 12px; color: var(--ink-dim); }
+.rules summary { cursor: pointer; color: var(--ink); font-weight: 700; }
+.rules ul { padding-left: 1.2em; max-width: 42em; }
+.rules li + li { margin-top: 6px; }
+.rules b { color: var(--ink); }
+
+/* ── 對局版面 ── */
+.game {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 16px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.board { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+/* 英雄列 */
+.hero-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--lane);
+}
+.hero-bar.active { border-color: color-mix(in srgb, var(--gold) 60%, var(--line)); }
+.portrait {
+  position: relative;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: radial-gradient(circle at 35% 30%, var(--tile), var(--table));
+  display: grid;
+  place-items: center;
+  cursor: default;
+}
+.hp-num { font-family: var(--font-num); font-weight: 700; font-size: 1.5rem; color: var(--hp); font-variant-numeric: tabular-nums; }
+.hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hero-name { font-weight: 700; }
+.deck-name { font-weight: 400; color: var(--ink-dim); font-size: 0.85rem; margin-left: 4px; }
+.mana { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.gem { width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px; display: inline-block; }
+.gem.full { background: var(--gold); box-shadow: 0 0 6px color-mix(in srgb, var(--gold) 60%, transparent); }
+.gem.spent { border: 1.5px solid var(--gold); opacity: 0.6; }
+.gem.locked { border: 1px solid var(--line); }
+.mana-num { margin-left: 6px; font-family: var(--font-num); font-weight: 600; font-variant-numeric: tabular-nums; }
+.resonance { display: flex; gap: 4px; flex-wrap: wrap; font-size: 0.85rem; }
+.piles { display: flex; flex-direction: column; align-items: flex-end; font-size: 0.8rem; color: var(--ink-dim); white-space: nowrap; }
+.piles b { color: var(--ink); font-family: var(--font-num); font-size: 1rem; }
+
+/* 三路戰場 */
+.field { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.lane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--lane);
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+.lane-half { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-height: 92px; align-content: center; }
+.lane-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.3em;
+  color: var(--ink-dim);
+}
+.lane-label::before, .lane-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+.minion {
+  position: relative;
+  min-width: 0;
+  height: 92px;
+  padding: 6px 6px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--el);
+  background: var(--tile);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  cursor: default;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.m-name { font-weight: 700; font-size: 0.82rem; line-height: 1.2; overflow-wrap: anywhere; }
+.m-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; min-height: 1em; }
+.m-tags em { font-style: normal; font-size: 0.66rem; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 3px; }
+.minion .stats { margin-top: auto; }
+.minion.can-act { cursor: pointer; box-shadow: 0 0 0 2px color-mix(in srgb, var(--heal) 70%, transparent); }
+.minion.sleeping { opacity: 0.75; }
+.minion.frozen { background: color-mix(in srgb, var(--water) 25%, var(--tile)); }
+.minion.selected { transform: translateY(-4px); box-shadow: 0 0 0 2px var(--gold), 0 6px 14px rgb(0 0 0 / 0.4); }
+.minion.targetable, .portrait.targetable {
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--hp), 0 0 14px color-mix(in srgb, var(--hp) 50%, transparent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.minion.enter { animation: enter 0.3s ease-out; }
+
+.slot {
+  min-height: 92px;
+  border-radius: 10px;
+  border: 1.5px dashed var(--gold);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  color: var(--gold);
+  font-size: 0.8rem;
+  padding: 4px;
+}
+.slot:hover { background: color-mix(in srgb, var(--gold) 18%, transparent); }
+
+/* 攻擊 / 生命數字（場上與手牌共用） */
+.stats { display: flex; justify-content: space-between; width: 100%; }
+.atk, .hp {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1rem;
+  min-width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--card-ink);
+  font-variant-numeric: tabular-nums;
+}
+.atk { background: var(--gold); }
+.hp { background: var(--hp); color: #fff; }
+.hp.hurt { box-shadow: inset 0 0 0 2px var(--table); }
+.atk.up, .hp.up { outline: 2px solid var(--heal); }
+
+.dmg {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--hp);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+  pointer-events: none;
+  animation: float 1s ease-out forwards;
+}
+
+/* 成長選擇 / 行動列 */
+.growth {
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--gold) 6%, var(--lane));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.growth-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.growth-head h2 { font-family: var(--font-display); font-size: 1.15rem; color: var(--gold); letter-spacing: 0.1em; }
+.growth-head span { color: var(--ink-dim); font-size: 0.85rem; }
+.growth-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.growth-opt {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--tile);
+  padding: 10px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.growth-opt b { font-family: var(--font-display); font-size: 1.05rem; }
+.growth-opt span { color: var(--ink-dim); font-size: 0.82rem; }
+.growth-opt:hover:not(:disabled) { border-color: var(--gold); }
+.growth-opt:disabled { opacity: 0.4; cursor: not-allowed; }
+.element-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip-btn {
+  border: 1.5px solid var(--el);
+  background: color-mix(in srgb, var(--el) 15%, transparent);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-weight: 700;
+}
+.action-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 42px; }
+.hint { flex: 1; min-width: 12em; color: var(--ink-dim); }
+
+/* 手牌 */
+.hand { display: flex; gap: 10px; overflow-x: auto; padding: 16px 4px 10px 10px; min-height: 200px; }
+.card {
+  position: relative;
+  flex: none;
+  width: 128px;
+  min-height: 176px;
+  padding: 10px 8px 8px;
+  border-radius: 10px;
+  border: 0;
+  border-top: 6px solid var(--el);
+  background: var(--card);
+  color: var(--card-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  opacity: 0.62;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.card.playable { opacity: 1; box-shadow: 0 0 0 2px color-mix(in srgb, var(--heal) 70%, transparent); }
+.card.playable:hover { transform: translateY(-4px); }
+.card.selected { transform: translateY(-8px); box-shadow: 0 0 0 3px var(--gold), 0 8px 18px rgb(0 0 0 / 0.45); }
+.cost {
+  position: absolute;
+  top: -12px;
+  left: -6px;
+  width: 30px;
+  height: 30px;
+  transform: rotate(45deg);
+  border-radius: 6px;
+  background: var(--gold);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-num);
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.4);
+}
+.cost.reduced { background: var(--heal); }
+.cost > span { transform: rotate(-45deg); }
+.c-name { font-family: var(--font-display); font-weight: 900; font-size: 1rem; padding-left: 18px; line-height: 1.25; }
+.c-type { font-size: 0.72rem; color: var(--card-dim); letter-spacing: 0.05em; }
+.c-text { font-size: 0.78rem; line-height: 1.4; flex: 1; }
+
+/* 戰鬥紀錄 */
+.log {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--lane);
+  padding: 12px;
+  align-self: start;
+  position: sticky;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.log-head { display: flex; justify-content: space-between; align-items: baseline; }
+.log h2 { font-size: 0.9rem; letter-spacing: 0.15em; color: var(--ink-dim); }
+.log ol { list-style: none; margin: 8px 0 0; padding: 0; overflow-y: auto; font-size: 0.82rem; display: flex; flex-direction: column; gap: 4px; }
+.log li.turn { color: var(--gold); margin-top: 6px; }
+
+/* 遮罩 / 提示 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(5 10 12 / 0.7);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 20;
+}
+.overlay.opaque { background: var(--table); }
+.panel {
+  background: var(--lane);
+  border: 1px solid var(--gold);
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 420px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.panel h2 { font-family: var(--font-display); font-size: 1.8rem; }
+.panel p { margin: 0; color: var(--ink-dim); }
+.eyebrow { font-size: 0.8rem; letter-spacing: 0.2em; color: var(--gold) !important; }
+.panel-actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  background: var(--card);
+  color: var(--card-ink);
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  z-index: 30;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+}
+
+@keyframes pulse { 50% { box-shadow: 0 0 0 2px var(--hp), 0 0 22px color-mix(in srgb, var(--hp) 70%, transparent); } }
+@keyframes enter { from { transform: scale(0.8); opacity: 0; } }
+@keyframes float { to { transform: translate(-50%, -24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* 窄螢幕 */
+@media (max-width: 860px) {
+  .game { grid-template-columns: minmax(0, 1fr); }
+  .log { position: static; max-height: 260px; }
+}
+@media (max-width: 520px) {
+  .field { gap: 4px; }
+  .lane { padding: 4px; gap: 4px; }
+  .lane-half { gap: 4px; min-height: 80px; }
+  .minion, .slot { height: 80px; min-height: 80px; }
+  .m-name { font-size: 0.72rem; }
+  .atk, .hp { font-size: 0.85rem; }
+  .growth-opts { grid-template-columns: minmax(0, 1fr); }
+  .card { width: 112px; }
+  .piles { display: none; }
+}
