@@ -284,7 +284,7 @@
         <details class="rules">
           <summary>規則速覽</summary>
           <ul>
-            <li>英雄 ${RULES.startHp} 血，牌組 20 張，費用最多 ${RULES.maxMana} 點。雙方起手 ${RULES.startHand[0]} 張，後手起始費用 1。</li>
+            <li>英雄生命先手 ${RULES.startHp[0]}、後手 ${RULES.startHp[1]}，牌組 20 張，費用最多 ${RULES.maxMana} 點。雙方起手 ${RULES.startHand[0]} 張，後手起始費用 1。</li>
             <li>每回合開始抽 1 張。前 ${RULES.autoManaTurns} 回合費用上限會自動 +1，之後只能靠成長選擇。</li>
             <li>每回合做一次<b>成長選擇</b>：擴充（費用上限 +1）、研讀（多抽 ${RULES.studyDraw} 張）或共鳴（某元素 +${RULES.resonanceGain}）。</li>
             <li>戰場分左、中、右三路，每路每方最多 2 隻隨從。隨從只能攻擊同一路的敵人；同一路沒有敵人時才能打英雄。</li>

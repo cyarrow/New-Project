@@ -82,17 +82,17 @@
 
     // ── 水 ──
     {
-      id: 'tide_apprentice', name: '潮汐學徒', element: 'water', type: 'minion', cost: 1, atk: 1, hp: 2,
-      text: '登場：為你的英雄恢復 2 點生命',
+      id: 'tide_apprentice', name: '潮汐學徒', element: 'water', type: 'minion', cost: 1, atk: 1, hp: 2, amount: 1,
+      text: '登場：為你的英雄恢復 1 點生命',
       onPlay(g, ctx) {
-        g.heal(g.heroRef(ctx.player), 2);
+        g.heal(g.heroRef(ctx.player), this.amount);
       },
     },
     {
-      id: 'frost_arrow', name: '冰霜箭', element: 'water', type: 'spell', cost: 2, target: 'anyMinion',
+      id: 'frost_arrow', name: '冰霜箭', element: 'water', type: 'spell', cost: 2, target: 'anyMinion', amount: 2,
       text: '對一隻隨從造成 2 點傷害並凍結。連擊：抽 1 張牌',
       onPlay(g, ctx) {
-        g.damage(ctx.target, 2);
+        g.damage(ctx.target, this.amount);
         g.freeze(ctx.target);
         if (ctx.combo) g.draw(ctx.player, 1);
       },
@@ -105,25 +105,25 @@
       },
     },
     {
-      id: 'wave_priest', name: '浪潮祭司', element: 'water', type: 'minion', cost: 4, atk: 3, hp: 5, resonance: { water: 3 },
-      text: '共鳴 3 登場：為所有友方角色恢復 3 點生命',
+      id: 'wave_priest', name: '浪潮祭司', element: 'water', type: 'minion', cost: 4, atk: 3, hp: 5, resonance: { water: 3 }, amount: 2,
+      text: '共鳴 3 登場：為所有友方角色恢復 2 點生命',
       onPlay(g, ctx) {
         if (g.resonance(ctx.player, 'water') < this.resonance.water) return;
-        g.heal(g.heroRef(ctx.player), 3);
-        for (const m of g.allMinions(ctx.player)) g.heal(g.ref(m), 3);
+        g.heal(g.heroRef(ctx.player), this.amount);
+        for (const m of g.allMinions(ctx.player)) g.heal(g.ref(m), this.amount);
       },
     },
 
     // ── 風 ──
     {
-      id: 'wind_courier', name: '迅風信使', element: 'wind', type: 'minion', cost: 1, atk: 1, hp: 1,
+      id: 'wind_courier', name: '迅風信使', element: 'wind', type: 'minion', cost: 1, atk: 1, hp: 2,
       text: '登場：本回合移動隨從不花費用，且移動後仍可攻擊',
       onPlay(g, ctx) {
         g.setFreeMoves(ctx.player);
       },
     },
     {
-      id: 'whirlwind', name: '旋風', element: 'wind', type: 'spell', cost: 2, target: 'enemyMinion',
+      id: 'whirlwind', name: '旋風', element: 'wind', type: 'spell', cost: 1, target: 'enemyMinion',
       text: '將一隻敵方隨從移回對手手牌',
       onPlay(g, ctx) {
         g.bounce(ctx.target);
@@ -143,7 +143,7 @@
 
     // ── 土 ──
     {
-      id: 'stone_sentry', name: '石皮哨兵', element: 'earth', type: 'minion', cost: 1, atk: 1, hp: 3,
+      id: 'stone_sentry', name: '石皮哨兵', element: 'earth', type: 'minion', cost: 1, atk: 1, hp: 4,
       keywords: ['guard'], text: '守護',
     },
     {
@@ -210,7 +210,7 @@
       },
     },
     {
-      id: 'lava_colossus', name: '熔岩巨像', element: 'fire', type: 'minion', cost: 7, atk: 5, hp: 6, resonance: { fire: 3 },
+      id: 'lava_colossus', name: '熔岩巨像', element: 'fire', type: 'minion', cost: 7, atk: 4, hp: 6, resonance: { fire: 3 },
       trampleMultiplier: 2,
       text: '穿透傷害加倍。共鳴 火 3：費用 -2',
       costMod(player) {

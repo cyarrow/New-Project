@@ -35,12 +35,13 @@ function pass(s) {
   return toMain(act(s, { type: 'endTurn' }));
 }
 
-test('開局：先手 3+1 張、後手 3 張，雙方 25 血，第一回合自動有 1 費', () => {
+test('開局：先手 3+1 張、後手 3 張，先手 26 血、後手 25 血，第一回合自動有 1 費', () => {
   const s = G.createGame({ seed: 42 });
   assert.equal(s.players[0].hand.length, 4);
   assert.equal(s.players[1].hand.length, 3);
   assert.equal(s.players[0].deck.length + s.players[0].hand.length, 20);
-  assert.equal(s.players[0].hp, 25);
+  assert.equal(s.players[0].hp, 26);
+  assert.equal(s.players[1].hp, 25);
   assert.equal(s.players[0].maxMana, 1);
   assert.equal(s.players[0].mana, 1);
   assert.equal(s.phase, 'growth');
@@ -374,8 +375,8 @@ test('岩漿蜥蜴：攻擊守護隨從時攻擊 +2', () => {
   s = pass(s);
   const hp = s.players[1].hp;
   s = act(s, { type: 'attack', uid: s.players[0].lanes[0][0].uid, target: ref(s.players[1].lanes[0][0]) });
-  assert.equal(s.players[1].lanes[0].length, 0, '4 點打死 1/3 的哨兵');
-  assert.equal(s.players[1].hp, hp - 1, '多出 1 點穿透');
+  assert.equal(s.players[1].lanes[0].length, 0, '2+2 = 4 點剛好打死 1/4 的哨兵');
+  assert.equal(s.players[1].hp, hp, '剛好打死，沒有穿透');
 });
 
 test('碎盾重擊：移除守護並造成 1 點傷害', () => {
@@ -433,5 +434,5 @@ test('熔岩巨像：穿透傷害加倍，火共鳴 3 時費用 -2', () => {
   s = pass(s);
   const hp = s.players[1].hp;
   s = act(s, { type: 'attack', uid: s.players[0].lanes[0][0].uid, target: ref(s.players[1].lanes[0][0]) });
-  assert.equal(s.players[1].hp, hp - 6, '5 攻打 2 血，多 3 點，加倍成 6');
+  assert.equal(s.players[1].hp, hp - 4, '4 攻打 2 血，多 2 點，加倍成 4');
 });

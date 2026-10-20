@@ -7,7 +7,7 @@
   const { CARDS, DECKS, ELEMENTS, KEYWORDS, GLOSSARY } = Cards;
 
   const RULES = {
-    startHp: 25,
+    startHp: [26, 25], // [先手, 後手]：先手多 1 點生命，平衡後手的起始費用
     maxMana: 8,
     laneCount: 3,
     laneSize: 2,
@@ -17,7 +17,7 @@
     moveCost: 1,
     studyDraw: 1,
     resonanceGain: 2,
-    autoManaTurns: 3, // 每位玩家前幾個回合費用上限自動 +1
+    autoManaTurns: 3, // 每位玩家前幾個回合費用上限自動 +1（也可以寫成 [先手, 後手]）
     growthOnAutoTurns: true, // 自動成長的回合是否還要做成長選擇
     manaDelay: false, // 擴充的新水晶要下回合才能用
     secondPlayerPicks: 1, // 後手第一回合的成長選擇次數
@@ -120,7 +120,7 @@
   function heal(s, ref, amount) {
     if (ref.kind === 'hero') {
       const p = s.players[ref.player];
-      p.hp = Math.min(RULES.startHp, p.hp + amount);
+      p.hp = Math.min(p.maxHp, p.hp + amount);
     } else {
       const found = findMinion(s, ref.uid);
       if (found) found.minion.hp = Math.min(found.minion.maxHp, found.minion.hp + amount);
@@ -238,7 +238,8 @@
   function startTurn(s) {
     const p = s.players[s.current];
     const ownTurn = Math.ceil(s.turn / 2);
-    const autoTurn = ownTurn <= RULES.autoManaTurns;
+    const autoTurns = Array.isArray(RULES.autoManaTurns) ? RULES.autoManaTurns[s.current] : RULES.autoManaTurns;
+    const autoTurn = ownTurn <= autoTurns;
     if (autoTurn) p.maxMana = Math.min(RULES.maxMana, p.maxMana + 1);
     p.mana = p.maxMana + (s.turn === 2 ? RULES.secondPlayerBonusMana : 0);
     p.freeMoves = false;
@@ -288,7 +289,8 @@
       s.players.push({
         name: names[i],
         deckId: deckIds[i],
-        hp: RULES.startHp,
+        hp: [].concat(RULES.startHp)[i] ?? RULES.startHp,
+        maxHp: [].concat(RULES.startHp)[i] ?? RULES.startHp,
         maxMana: RULES.startMana[i],
         mana: 0,
         deck: shuffle(s, deck.cards.map((cardId) => ({ uid: s.nextUid++, cardId }))),

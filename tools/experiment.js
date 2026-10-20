@@ -58,8 +58,11 @@ function measure(label, config) {
 const EXPERIMENTS = {
   '目前規則': {},
   'v0.1 原始規則': {
-    startMana: [0, 1], startHand: [3, 4], autoManaTurns: 0, secondPlayerPicks: 2, laneControlDamage: 0, trample: false, resonanceGain: 1,
-    cards: { wave_priest: { resonance: { water: 2 } }, mountain_turtle: { resonance: { earth: 2 } } },
+    startHp: 25, startMana: [0, 1], startHand: [3, 4], autoManaTurns: 0, secondPlayerPicks: 2, laneControlDamage: 0, trample: false, resonanceGain: 1,
+    cards: {
+      wave_priest: { resonance: { water: 2 }, amount: 3 }, mountain_turtle: { resonance: { earth: 2 } },
+      tide_apprentice: { amount: 2 }, wind_courier: { hp: 1 }, whirlwind: { cost: 2 }, stone_sentry: { hp: 3 },
+    },
   },
   '不用控制路線': { laneControlDamage: 0 },
   '不用穿透': { trample: false },
