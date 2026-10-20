@@ -34,7 +34,7 @@
 
   const STEPS = [
     {
-      text: '歡迎來到元素戰線！上方是對手「教官」，下方是你。把對手英雄的生命打到 0 就獲勝。中間的三欄是戰場的左、中、右三路。',
+      text: '歡迎來到元素戰線！上方是對手「教官」，下方是你。把對手英雄的生命打到 0 就獲勝。中間的三欄是戰場的左、中、右三路。看不懂某張牌時，長按它（電腦也可以按右鍵）就會顯示完整說明。',
       focus: ['.field'],
     },
     {
@@ -126,13 +126,15 @@
     me.deck = cards(['mercenary', 'lava_hound', 'harpy_ranger', 'field_scout', 'storm_lord', 'blaze_giant',
       'flame_bolt', 'whirlwind', 'wind_courier', 'recruit', 'lava_hound', 'harpy_ranger', 'field_scout', 'storm_lord', 'blaze_giant']);
     coach.hand = cards(['recruit', 'stone_sentry', 'mercenary', 'deep_watcher']);
-    coach.deck = cards(['tide_apprentice', 'rock_golem', 'ancient_guard', 'frost_arrow', 'wave_priest', 'earth_shield',
-      'mountain_turtle', 'stone_sentry', 'mercenary', 'deep_watcher', 'tide_apprentice', 'rock_golem', 'ancient_guard', 'frost_arrow', 'wave_priest', 'earth_shield']);
+    // 教官的牌組比較弱，血量也比較少，教學結束後把這局打完不會太難
+    coach.deck = cards(['tide_apprentice', 'recruit', 'ancient_guard', 'mercenary', 'deep_watcher', 'stone_sentry',
+      'recruit', 'tide_apprentice', 'mercenary', 'frost_arrow', 'recruit', 'deep_watcher', 'ancient_guard', 'stone_sentry', 'mercenary', 'recruit']);
+    coach.hp = 18;
     s.log = ['新手教學開始', '── 第 1 回合：你 ──'];
     return s;
   }
 
-  // 教學中對手的下一個行動；劇本走完就交給電腦
+  // 教學中對手的下一個行動；劇本走完就交給簡單的電腦
   function opponentAction(s, index) {
     const script = OPPONENT_SCRIPT[s.turn];
     return script && script[index] ? script[index](s) : null;

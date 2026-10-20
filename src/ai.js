@@ -96,21 +96,32 @@
   }
 
   // 回傳下一個行動；沒有更好的行動時結束回合
+  // opts.difficulty：'normal'（預設，選最好的行動）或 'easy'（新手用，見下方）
   function nextAction(state, opts = {}) {
-    if (state.phase === 'growth') return chooseGrowth(state, opts.growth || 'smart');
+    const easy = opts.difficulty === 'easy';
+    const random = opts.random || Math.random;
+    if (state.phase === 'growth') return chooseGrowth(state, opts.growth || (easy ? 'random' : 'smart'));
     // 試算時不需要戰鬥紀錄，拿掉可以快很多
     const s = Object.assign({}, state, { log: [] });
     const me = s.current;
-    let best = null;
-    let bestScore = evaluate(s, me) + 0.01;
+    const base = evaluate(s, me) + 0.01;
+    const good = [];
     for (const action of candidateActions(s)) {
       const score = evaluate(G.applyAction(s, action), me);
-      if (score > bestScore) {
-        bestScore = score;
-        best = action;
-      }
+      if (score > base) good.push({ action, score });
     }
-    return best || { type: 'endTurn' };
+    if (!easy) {
+      good.sort((a, b) => b.score - a.score);
+      return good.length ? good[0].action : { type: 'endTurn' };
+    }
+    // 簡單：每回合最多出 1 張牌、法術不打臉、從還不錯的行動裡隨便挑，有時候會提早結束回合
+    const options = good.filter(({ action }) => {
+      if (action.type !== 'play') return true;
+      if (s.playedElements.length >= 1) return false;
+      return !(action.target && action.target.kind === 'hero');
+    });
+    if (!options.length || (s.playedElements.length && random() < 0.3)) return { type: 'endTurn' };
+    return options[Math.floor(random() * options.length)].action;
   }
 
   const api = { evaluate, candidateActions, chooseGrowth, nextAction };

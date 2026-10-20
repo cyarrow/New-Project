@@ -10,7 +10,7 @@
     document.documentElement.style.setProperty('--spring', M.SPRING.easing);
     document.documentElement.style.setProperty('--spring-dur', `${M.SPRING.duration}ms`);
   }
-  const { CARDS, DECKS, ELEMENTS, KEYWORDS, LANE_NAMES, RULES } = G;
+  const { CARDS, DECKS, ELEMENTS, KEYWORDS, GLOSSARY, LANE_NAMES, RULES } = G;
   const app = document.getElementById('app');
 
   const MODES = {
@@ -19,13 +19,15 @@
     hotseat: { name: '雙人同機', desc: '和朋友用同一台電腦輪流玩' },
   };
 
-  let settings = { mode: 'tutorial', decks: ['gale', 'deeprock'], names: ['玩家 1', '玩家 2'], soloTest: false };
+  let settings = { mode: 'tutorial', decks: ['gale', 'deeprock'], names: ['玩家 1', '玩家 2'], soloTest: false, difficulty: 'easy' };
   let game = null;
   let mode = null; // 目前這局的模式
+  let difficulty = 'easy'; // 目前這局電腦的難度
   let tutorial = null; // { step, scriptIndex }
   let selected = null; // { kind: 'hand' | 'minion', uid }
   let handoff = false;
   let pickingElement = false;
+  let detail = null; // 正在看說明的卡：{ uid, kind: 'hand' | 'minion', sourceKey }
   let aiTimer = null;
   let toastText = '';
   let toastId = 0;
@@ -204,7 +206,7 @@
     if (!humanTurn()) {
       return `<div class="action-bar"><span class="hint thinking">${esc(game.players[game.current].name)} 行動中…</span></div>`;
     }
-    const hint = sel.hint || '點手牌出牌，點自己的隨從攻擊或移動';
+    const hint = sel.hint || '點手牌出牌，點自己的隨從攻擊或移動。長按卡牌看說明';
     return `
       <div class="action-bar">
         <span class="hint">${esc(hint)}</span>
@@ -245,7 +247,14 @@
       return `
       <fieldset class="seat">
         <legend>${isAi ? '電腦（後手）' : m === 'ai' ? '你（先手）' : i === 0 ? '先手' : '後手'}</legend>
-        ${isAi ? '' : `<label class="field-label" for="name-${i}">名字</label>
+        ${isAi ? `<div class="deck-opts difficulty" role="radiogroup" aria-label="電腦難度">
+          ${[['easy', '簡單', '適合剛學會規則'], ['normal', '普通', '每一步都選最好的']].map(([id, name, desc]) => `
+            <label class="deck-opt">
+              <input type="radio" name="difficulty" id="difficulty-${id}" value="${id}" ${settings.difficulty === id ? 'checked' : ''}>
+              <span><b>${name}</b><small>${desc}</small></span>
+            </label>`).join('')}
+        </div>
+        <span class="field-label">牌組</span>` : `<label class="field-label" for="name-${i}">名字</label>
         <input id="name-${i}" type="text" maxlength="12" value="${esc(settings.names[i])}">`}
         <div class="deck-opts" role="radiogroup" aria-label="選擇牌組">
           ${Object.entries(DECKS).map(([id, d]) => `
@@ -286,6 +295,122 @@
           </ul>
         </details>
       </main>`;
+  }
+
+  // ── 卡牌說明 ──
+  function detailTarget() {
+    if (!detail || !game) return null;
+    if (detail.kind === 'minion') {
+      const found = G.findMinion(game, detail.uid);
+      return found && { cardId: found.minion.cardId, minion: found.minion, owner: found.owner };
+    }
+    const owner = viewer();
+    const card = game.players[owner].hand.find((c) => c.uid === detail.uid);
+    return card && { cardId: card.cardId, owner };
+  }
+
+  function detailTerms(def, m) {
+    const terms = [def.type === 'minion' ? '隨從' : '法術'];
+    const add = (term) => { if (term && !terms.includes(term)) terms.push(term); };
+    for (const kw of def.keywords) add(KEYWORDS[kw]);
+    if (m) for (const kw of [...m.keywords, ...m.tempKeywords]) add(KEYWORDS[kw]);
+    for (const term of Object.keys(GLOSSARY)) if (def.text.includes(term)) add(term);
+    if (m && m.frozen) add('凍結');
+    if (def.type === 'minion') add('穿透');
+    return terms;
+  }
+
+  function detailHtml() {
+    const target = detailTarget();
+    if (!target) {
+      detail = null;
+      return '';
+    }
+    const def = CARDS[target.cardId];
+    const m = target.minion;
+    const owner = game.players[target.owner];
+    const whose = mode === 'hotseat' ? `${esc(owner.name)}的` : target.owner === viewer() ? '你的' : '對手的';
+    const cost = G.getCost(owner, def.id);
+    const status = [];
+    if (m) {
+      const atk = G.attackOf(m);
+      status.push(`攻擊 ${atk}${atk !== def.atk ? `（原本 ${def.atk}）` : ''}`);
+      status.push(`生命 ${m.hp} / ${m.maxHp}${m.maxHp !== def.hp ? `（原本 ${def.hp}）` : ''}`);
+      if (target.owner === game.current) {
+        if (m.sleeping) status.push('剛上場，下回合才能攻擊');
+        else if (m.attacked) status.push('這回合已經攻擊過');
+        else if (m.moveLocked) status.push('這回合移動過，不能攻擊');
+      }
+      if (m.frozen) status.push('被凍結，下回合不能攻擊');
+      if (m.tempAtk) status.push(`本回合攻擊 +${m.tempAtk}`);
+    } else if (cost !== def.cost) {
+      status.push(`目前費用 ${cost}（原本 ${def.cost}）`);
+    }
+    const resonance = def.resonance ? Object.entries(def.resonance).map(([el, need]) => {
+      const have = owner.resonance[el];
+      return `<li>${whose}${ELEMENTS[el].name}共鳴：${have} / ${need}${have >= need ? '（已啟動）' : `（還差 ${need - have}）`}</li>`;
+    }).join('') : '';
+    return `
+      <div class="detail-layer" data-key="detail-layer">
+        <button class="detail-scrim" data-action="close-detail" aria-label="關閉說明" tabindex="-1"></button>
+        <section class="detail" role="dialog" aria-modal="true" aria-labelledby="detail-title" data-key="detail${detail.uid}">
+          <div class="detail-card">${cardFace(def.id, cost, 'tabindex="-1" aria-hidden="true"')}</div>
+          <div class="detail-body">
+            <p class="eyebrow">${m ? `${whose}隨從` : `${ELEMENTS[def.element].name} · ${def.type === 'minion' ? '隨從' : '法術'} · ${def.cost} 費`}</p>
+            <h2 id="detail-title">${def.name}</h2>
+            <p class="detail-text">${esc(def.text) || '沒有特殊效果。'}</p>
+            ${status.length || resonance ? `<ul class="detail-status">${status.map((x) => `<li>${x}</li>`).join('')}${resonance}</ul>` : ''}
+            <dl class="glossary">
+              ${detailTerms(def, m).map((term) => `<dt>${term}</dt><dd>${GLOSSARY[term]}</dd>`).join('')}
+            </dl>
+            <div class="detail-actions"><button class="btn ghost" data-action="close-detail" id="detail-close">知道了</button></div>
+          </div>
+        </section>
+      </div>`;
+  }
+
+  function openDetail(el) {
+    if (!game) return;
+    selected = null;
+    detail = { uid: Number(el.dataset.uid), kind: el.classList.contains('minion') ? 'minion' : 'hand', sourceKey: el.dataset.key };
+    const from = el.getBoundingClientRect();
+    render();
+    const panel = app.querySelector('.detail');
+    if (!panel) return;
+    // 從被按住的卡牌放大出來
+    if (M.reduceMotion.matches) {
+      panel.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200 });
+    } else {
+      const to = panel.getBoundingClientRect();
+      const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+      const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+      const s = Math.min(from.width / to.width, 1);
+      panel.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 0 }, { transform: 'none', opacity: 1 }], M.SPRING);
+    }
+    const close = document.getElementById('detail-close');
+    if (close) close.focus({ preventScroll: true });
+  }
+
+  function closeDetail() {
+    if (!detail) return;
+    const panel = app.querySelector('.detail');
+    const source = app.querySelector(`[data-key="${detail.sourceKey}"]`);
+    const finish = () => {
+      detail = null;
+      render();
+      if (source && source.isConnected) source.focus({ preventScroll: true });
+    };
+    if (!panel || M.reduceMotion.matches || !source) return finish();
+    // 收回到原本那張卡的位置
+    const from = panel.getBoundingClientRect();
+    const to = source.getBoundingClientRect();
+    const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+    const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+    const s = Math.min(to.width / from.width, 1);
+    const scrim = app.querySelector('.detail-scrim');
+    if (scrim) scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' });
+    panel.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 0 }],
+      { duration: 220, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' }).finished.then(finish, finish);
   }
 
   function overlayHtml() {
@@ -352,7 +477,8 @@
         </aside>
       </div>
       ${turnBanner()}
-      ${overlayHtml()}`;
+      ${overlayHtml()}
+      ${detailHtml()}`;
   }
 
   // fx：這次行動要播放的動畫資訊（見 actionFx）
@@ -404,7 +530,7 @@
     if (!game || game.phase === 'over' || mode === 'hotseat' || game.current === 0) return;
     aiTimer = setTimeout(() => {
       let action = tutorial ? T.opponentAction(game, tutorial.scriptIndex++) : null;
-      if (!action) action = AI.nextAction(game);
+      if (!action) action = AI.nextAction(game, { difficulty });
       let fx = {};
       try {
         fx = actionFx(action);
@@ -452,6 +578,8 @@
     }
     const solo = document.getElementById('solo-test');
     if (solo) settings.soloTest = solo.checked;
+    const diff = document.querySelector('input[name="difficulty"]:checked');
+    if (diff) settings.difficulty = diff.value;
   }
 
   function startMode(m) {
@@ -462,11 +590,12 @@
     mode = m;
     tutorial = null;
     handoff = false;
+    difficulty = m === 'ai' ? settings.difficulty : 'easy';
     if (m === 'tutorial') {
       game = T.createTutorialGame();
       tutorial = { step: 0, scriptIndex: 0 };
     } else {
-      const names = m === 'ai' ? [settings.names[0], '電腦'] : settings.names.slice();
+      const names = m === 'ai' ? [settings.names[0], `電腦（${difficulty === 'easy' ? '簡單' : '普通'}）`] : settings.names.slice();
       game = G.createGame({ decks: settings.decks, names });
       handoff = m === 'hotseat' && !settings.soloTest;
     }
@@ -541,6 +670,9 @@
       pickingElement = false;
       dispatch({ type: 'growth', choice: 'resonance', element: el.dataset.element });
     },
+    'close-detail'() {
+      closeDetail();
+    },
     'cancel-pick'() {
       pickingElement = false;
       render();
@@ -572,6 +704,7 @@
     },
     'tut-ai'() {
       settings.mode = 'ai';
+      settings.difficulty = 'easy';
       startMode('ai');
     },
     again() {
@@ -585,7 +718,59 @@
     },
   };
 
+  // 長按（或右鍵）卡牌看說明。按下時就開始計時，手指移動超過 10px 就取消。
+  const LONG_PRESS_MS = 450;
+  let press = null;
+  let suppressClick = false;
+  const pressable = (target) => target.closest('.card[data-uid], .minion[data-uid]');
+
+  function cancelPress() {
+    if (!press) return;
+    clearTimeout(press.timer);
+    press.el.classList.remove('pressing');
+    press = null;
+  }
+
+  app.addEventListener('pointerdown', (e) => {
+    suppressClick = false;
+    if (detail || e.button > 0) return;
+    const el = pressable(e.target);
+    if (!el) return;
+    cancelPress();
+    el.classList.add('pressing');
+    const p = { el, x: e.clientX, y: e.clientY, done: false };
+    p.timer = setTimeout(() => {
+      p.done = true;
+      el.classList.remove('pressing');
+      suppressClick = true;
+      if (navigator.vibrate) navigator.vibrate(8);
+      openDetail(el);
+    }, LONG_PRESS_MS);
+    press = p;
+  });
+  app.addEventListener('pointermove', (e) => {
+    if (press && !press.done && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress();
+  });
+  for (const type of ['pointerup', 'pointercancel']) {
+    app.addEventListener(type, () => {
+      if (press && !press.done) cancelPress();
+      else press = null;
+    });
+  }
+  app.addEventListener('contextmenu', (e) => {
+    const el = pressable(e.target);
+    if (!el) return;
+    e.preventDefault();
+    if (detail) return;
+    cancelPress();
+    openDetail(el);
+  });
+
   app.addEventListener('click', (e) => {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
     const el = e.target.closest('[data-action]');
     if (el && handlers[el.dataset.action]) {
       if (PLAYER_ACTIONS.has(el.dataset.action) && !humanTurn()) return;
@@ -605,6 +790,15 @@
   });
 
   document.addEventListener('keydown', (e) => {
+    if (detail) {
+      if (e.key === 'Escape') closeDetail();
+      return;
+    }
+    const focused = document.activeElement && pressable(document.activeElement);
+    if ((e.key === 'i' || e.key === '?') && focused) {
+      openDetail(focused);
+      return;
+    }
     if (e.key === 'Escape' && (selected || pickingElement)) {
       selected = null;
       pickingElement = false;
@@ -614,12 +808,13 @@
 
   // 預覽環境更新頁面時保留對局（一般瀏覽器中沒有作用）
   const hot = window.claude && window.claude.hot;
-  if (hot && hot.snapshot) hot.snapshot(() => ({ game, mode, tutorial, settings, handoff }));
+  if (hot && hot.snapshot) hot.snapshot(() => ({ game, mode, difficulty, tutorial, settings, handoff }));
   function boot(data) {
     if (data && data.settings) settings = Object.assign(settings, data.settings);
     if (data && data.game) {
       game = data.game;
       mode = data.mode || 'hotseat';
+      difficulty = data.difficulty || 'easy';
       tutorial = data.tutorial || null;
       handoff = !!data.handoff;
     }

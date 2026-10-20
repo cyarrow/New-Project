@@ -34,6 +34,22 @@
     guard: '守護',
   };
 
+  // 名詞說明（長按卡牌時顯示）
+  const GLOSSARY = {
+    衝鋒: '上場當回合就能攻擊。',
+    疾風: '除了同一路，也能攻擊相鄰路線的敵方隨從。同一路和相鄰路線都沒有敵人時，才能攻擊英雄。',
+    守護: '同一路的敵人攻擊時，必須先打有守護的隨從。',
+    凍結: '被凍結的隨從下一回合不能攻擊。',
+    登場: '從手牌打出這張牌時觸發。',
+    遺言: '這隻隨從死亡時觸發。',
+    連擊: '這回合已經打出過同元素的其他牌時，才會觸發。',
+    共鳴: '「共鳴 X」：你這個元素的共鳴值達到 X 時才會觸發。共鳴值靠每回合的成長選擇「共鳴」累積。',
+    法術: '打出後立刻生效，然後消失。',
+    隨從: '放在戰場上的單位。上場當回合不能攻擊（有衝鋒除外），只能攻擊同一路的敵人。',
+    穿透: '隨從打死敵方隨從後，多出來的傷害會打到敵方英雄（所有隨從都有）。',
+    控制路線: '回合開始時，每條只有你有隨從的路線，會對敵方英雄造成 1 點傷害。',
+  };
+
   const CARD_LIST = [
     // ── 火 ──
     {
@@ -181,7 +197,7 @@
   };
   for (const d of Object.values(DECKS)) d.cards = d.cards.flatMap((id) => [id, id]);
 
-  const api = { ELEMENTS, KEYWORDS, CARDS, DECKS };
+  const api = { ELEMENTS, KEYWORDS, GLOSSARY, CARDS, DECKS };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ElementCards = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

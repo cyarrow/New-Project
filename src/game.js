@@ -4,7 +4,7 @@
   'use strict';
 
   const Cards = typeof module === 'object' && module.exports ? require('./cards.js') : root.ElementCards;
-  const { CARDS, DECKS, ELEMENTS, KEYWORDS } = Cards;
+  const { CARDS, DECKS, ELEMENTS, KEYWORDS, GLOSSARY } = Cards;
 
   const RULES = {
     startHp: 25,
@@ -508,7 +508,7 @@
   }
 
   const api = {
-    RULES, LANE_NAMES, RESONANCE_ELEMENTS, CARDS, DECKS, ELEMENTS, KEYWORDS,
+    RULES, LANE_NAMES, RESONANCE_ELEMENTS, CARDS, DECKS, ELEMENTS, KEYWORDS, GLOSSARY,
     createGame, applyAction,
     getCost, findMinion, hasKeyword, attackOf,
     growthOptions, openLanes, playTargets, playBlocker, canAttack, attackTargets, moveOptions, moveCost,
