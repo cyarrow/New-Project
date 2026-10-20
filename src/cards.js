@@ -10,7 +10,7 @@
 //   keywords  關鍵字：charge（衝鋒）、swift（疾風）、guard（守護）
 //   target    法術或登場效果需要的目標：any / anyMinion / enemyMinion / friendlyMinion
 //   text      卡面說明文字
-//   resonance 這張卡需要的共鳴，例如 { fire: 2 }（給電腦玩家參考）
+//   resonance 這張卡的共鳴門檻，例如 { fire: 2 }（效果與電腦玩家都讀這個數字）
 //   costMod   (player) => 費用增減
 //   onPlay    (g, ctx) => 打出時的效果（登場 / 法術）
 //   deathrattle (g, ctx) => 遺言效果
@@ -47,7 +47,7 @@
       id: 'flame_bolt', name: '烈焰術', element: 'fire', type: 'spell', cost: 2, target: 'any', resonance: { fire: 2 },
       text: '造成 3 點傷害。共鳴 2：改為 4 點',
       onPlay(g, ctx) {
-        g.damage(ctx.target, g.resonance(ctx.player, 'fire') >= 2 ? 4 : 3);
+        g.damage(ctx.target, g.resonance(ctx.player, 'fire') >= this.resonance.fire ? 4 : 3);
       },
     },
     {
@@ -87,10 +87,10 @@
       },
     },
     {
-      id: 'wave_priest', name: '浪潮祭司', element: 'water', type: 'minion', cost: 4, atk: 3, hp: 5, resonance: { water: 2 },
-      text: '共鳴 2 登場：為所有友方角色恢復 3 點生命',
+      id: 'wave_priest', name: '浪潮祭司', element: 'water', type: 'minion', cost: 4, atk: 3, hp: 5, resonance: { water: 3 },
+      text: '共鳴 3 登場：為所有友方角色恢復 3 點生命',
       onPlay(g, ctx) {
-        if (g.resonance(ctx.player, 'water') < 2) return;
+        if (g.resonance(ctx.player, 'water') < this.resonance.water) return;
         g.heal(g.heroRef(ctx.player), 3);
         for (const m of g.allMinions(ctx.player)) g.heal(g.ref(m), 3);
       },
@@ -141,10 +141,10 @@
       keywords: ['guard'], text: '守護',
     },
     {
-      id: 'mountain_turtle', name: '山脈巨龜', element: 'earth', type: 'minion', cost: 6, atk: 5, hp: 8, resonance: { earth: 2 },
-      text: '共鳴 2：費用 -2',
+      id: 'mountain_turtle', name: '山脈巨龜', element: 'earth', type: 'minion', cost: 6, atk: 5, hp: 8, resonance: { earth: 3 },
+      text: '共鳴 3：費用 -2',
       costMod(player) {
-        return player.resonance.earth >= 2 ? -2 : 0;
+        return player.resonance.earth >= this.resonance.earth ? -2 : 0;
       },
     },
 

@@ -19,7 +19,6 @@
   const OPPONENT_SCRIPT = {
     // 第 2 回合：教官在左路放新兵
     2: [
-      () => ({ type: 'growth', choice: 'mana' }),
       () => ({ type: 'growth', choice: 'draw' }),
       (s) => ({ type: 'play', uid: findCard(s, 'recruit').uid, lane: 0 }),
       () => ({ type: 'endTurn' }),
@@ -39,13 +38,13 @@
       focus: ['.field'],
     },
     {
-      text: '每回合開始要先做「成長選擇」。費用不會自動增加，現在選「擴充」，讓費用上限 +1。',
+      text: '前 3 個回合，費用上限會在回合開始時自動 +1，所以你現在有 1 費。接著每回合都要做一次「成長選擇」：現在選「擴充」，讓費用上限再 +1。',
       focus: ['[data-choice="mana"]'],
       expect: isGrowth('mana'),
       demo: () => ({ type: 'growth', choice: 'mana' }),
     },
     {
-      text: '你有 1 費了。點手牌中的「新兵」，再點中路的「放在這裡」。',
+      text: '你有 2 費了。點手牌中的「新兵」，再點中路的「放在這裡」。',
       focus: ['.card[data-card="recruit"]', '[data-action="place"][data-lane="1"]'],
       expect: (a, s) => plays(s, a, 'recruit') && a.lane === 1,
       demo: (s) => ({ type: 'play', uid: findCard(s, 'recruit').uid, lane: 1 }),
@@ -57,10 +56,10 @@
       demo: () => ({ type: 'endTurn' }),
     },
     {
-      text: '對手在左路放了一隻新兵。輪到你了，再選一次「擴充」，費用變成 2。',
-      focus: ['[data-choice="mana"]'],
-      expect: isGrowth('mana'),
-      demo: () => ({ type: 'growth', choice: 'mana' }),
+      text: '你的新兵獨佔了中路（對面沒有隨從），這叫「控制路線」：每回合開始時，對手會受到 1 點傷害。這回合試試「共鳴」：點「共鳴」，再選「火」，火的共鳴值會 +2。',
+      focus: ['[data-choice="resonance"]', '[data-action="resonate"][data-element="fire"]'],
+      expect: (a) => a.type === 'growth' && a.choice === 'resonance' && a.element === 'fire',
+      demo: () => ({ type: 'growth', choice: 'resonance', element: 'fire' }),
     },
     {
       text: '隨從只能攻擊同一路的敵人。中路對面沒有隨從擋路，所以你的新兵可以直接打英雄：點新兵，再點上方對手的頭像。',
@@ -69,19 +68,19 @@
       demo: (s) => ({ type: 'attack', uid: minionOf(s, 'recruit', 0).uid, target: { kind: 'hero', player: 1 } }),
     },
     {
-      text: '法術用完就會消失。點「烈焰術」，再點左路的敵方新兵，把它燒掉。',
+      text: '烈焰術寫著「共鳴 2：改為 4 點」。你的火共鳴已經是 2，所以它現在會造成 4 點傷害。點「烈焰術」，再點左路的敵方新兵，把它燒掉。',
       focus: ['.card[data-card="flame_bolt"]', '.minion[data-owner="1"]'],
       expect: (a, s) => plays(s, a, 'flame_bolt') && a.target?.kind === 'minion',
       demo: (s) => ({ type: 'play', uid: findCard(s, 'flame_bolt').uid, target: { kind: 'minion', uid: minionOf(s, 'recruit', 1).uid } }),
     },
     {
-      text: '費用用完了，按「結束回合」。',
+      text: '這回合做得差不多了，按「結束回合」。',
       focus: ['[data-action="end"]'],
       expect: isEnd,
       demo: () => ({ type: 'endTurn' }),
     },
     {
-      text: '對手在中路放了有「守護」的石皮哨兵，擋住你的新兵；左路也多了一隻傭兵劍士。先選「擴充」，費用變成 3。',
+      text: '對手在中路放了有「守護」的石皮哨兵，擋住你的新兵；左路也多了一隻傭兵劍士。這是費用自動成長的最後一個回合，選「擴充」讓費用變成 5。',
       focus: ['[data-choice="mana"]'],
       expect: isGrowth('mana'),
       demo: () => ({ type: 'growth', choice: 'mana' }),
@@ -93,7 +92,7 @@
       demo: (s) => ({ type: 'move', uid: minionOf(s, 'recruit', 0).uid, lane: 2 }),
     },
     {
-      text: '還剩 2 費。接下來試試「連擊」：同一回合已經出過同元素的牌，再出同元素的牌就會觸發額外效果。先出一張「火花精靈」，放在中路或左路。',
+      text: '接下來試試「連擊」：同一回合已經出過同元素的牌，再出同元素的牌就會觸發額外效果。先出一張「火花精靈」，放在中路或左路。',
       focus: ['.card[data-card="spark_sprite"]', '[data-action="place"]'],
       expect: (a, s) => plays(s, a, 'spark_sprite'),
       demo: (s) => ({ type: 'play', uid: findCard(s, 'spark_sprite').uid, lane: 0 }),
@@ -105,7 +104,7 @@
       demo: (s) => ({ type: 'play', uid: findCard(s, 'spark_sprite').uid, lane: 1 }),
     },
     {
-      text: '有衝鋒的隨從上場當回合就能攻擊。點發光的火花精靈，再點一個紅色閃爍的目標。注意：有「守護」的隨從會被優先攻擊。',
+      text: '有衝鋒的隨從上場當回合就能攻擊。點發光的火花精靈，再點一個紅色閃爍的目標。注意：有「守護」的隨從會被優先攻擊。打死隨從後如果還有多的傷害，會「穿透」打到對手英雄。',
       focus: ['.minion.can-act', '.targetable'],
       expect: (a) => a.type === 'attack',
       demo: (s) => {
@@ -114,7 +113,7 @@
       },
     },
     {
-      text: '最後介紹另外兩個成長選項：「研讀」多抽 1 張牌；「共鳴」讓一個元素的共鳴值 +1，卡牌上寫「共鳴 X」的效果就會變強，例如烈焰術在火共鳴 2 時傷害從 3 變成 4。每回合要衝費用、補手牌還是累積共鳴，由你決定！',
+      text: '最後一個成長選項是「研讀」：多抽 1 張牌。從第 4 回合開始，費用不會再自動增加，每回合要衝費用、補手牌還是累積共鳴，由你決定！記得多搶空著的路線，持續給對手壓力。',
       focus: ['.hero-bar.me .resonance'],
     },
   ];

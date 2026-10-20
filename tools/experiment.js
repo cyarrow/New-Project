@@ -25,7 +25,17 @@ function series(decks, strategies) {
   return [wins / GAMES, turns / GAMES, fatigue / GAMES];
 }
 
-function measure(label, overrides) {
+// 卡牌原始數值，每組實驗前還原；設定裡的 cards 欄位可以覆寫，例如 { "harpy_ranger": { "hp": 3 } }
+const CARD_FIELDS = ['cost', 'atk', 'hp', 'resonance', 'keywords'];
+const BASE_CARDS = {};
+for (const [id, c] of Object.entries(G.CARDS)) {
+  BASE_CARDS[id] = {};
+  for (const f of CARD_FIELDS) BASE_CARDS[id][f] = JSON.parse(JSON.stringify(c[f] ?? null));
+}
+
+function measure(label, config) {
+  const { cards = {}, ...overrides } = config;
+  for (const [id, base] of Object.entries(BASE_CARDS)) Object.assign(G.CARDS[id], JSON.parse(JSON.stringify(base)), cards[id] || {});
   Object.assign(G.RULES, JSON.parse(JSON.stringify(BASE)), overrides);
   const runs = {
     galeMirror: series(['gale', 'gale'], ['smart', 'smart']),
@@ -46,16 +56,23 @@ function measure(label, overrides) {
 }
 
 const EXPERIMENTS = {
-  '原始規則（後手起始費用 0）': { startMana: [0, 0] },
-  '目前規則（後手起始費用 1）': {},
-  '英雄 20 血': { startHp: 20 },
-  '研讀抽 2 張': { studyDraw: 2 },
-  '共鳴 +2': { resonanceGain: 2 },
-  '研讀抽 2 張＋共鳴 +2': { studyDraw: 2, resonanceGain: 2 },
-  '20 血＋研讀抽 2 張': { startHp: 20, studyDraw: 2 },
+  '目前規則': {},
+  'v0.1 原始規則': {
+    startMana: [0, 1], autoManaTurns: 0, secondPlayerPicks: 2, laneControlDamage: 0, trample: false, resonanceGain: 1,
+    cards: { wave_priest: { resonance: { water: 2 } }, mountain_turtle: { resonance: { earth: 2 } } },
+  },
+  '不用控制路線': { laneControlDamage: 0 },
+  '不用穿透': { trample: false },
+  '共鳴 +1': { resonanceGain: 1 },
 };
 
-const only = process.argv.slice(3);
+// 也可以從 JSON 檔讀入要比較的設定：node tools/experiment.js 200 configs.json
+const configFile = process.argv[3] && process.argv[3].endsWith('.json') ? process.argv[3] : null;
+if (configFile) {
+  for (const k of Object.keys(EXPERIMENTS)) delete EXPERIMENTS[k];
+  Object.assign(EXPERIMENTS, JSON.parse(require('fs').readFileSync(configFile, 'utf8')));
+}
+const only = configFile ? [] : process.argv.slice(3);
 console.log(`每組 ${GAMES} 局\n`);
 console.log('| 規則 | 先手勝率（鏡像） | 烈風勝率 | 看手牌成長 vs 只擴充 | 平均總回合 | 打到疲勞 |');
 console.log('|---|---|---|---|---|---|');

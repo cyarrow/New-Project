@@ -13,10 +13,17 @@
     laneSize: 2,
     handLimit: 8,
     startHand: [3, 4],
-    startMana: [0, 1], // 後手補償：起始費用上限 1（模擬顯示先手勝率從 67% 降到 46%）
+    startMana: [0, 1], // 後手補償：起始費用上限 1
     moveCost: 1,
     studyDraw: 1,
-    resonanceGain: 1,
+    resonanceGain: 2,
+    autoManaTurns: 3, // 每位玩家前幾個回合費用上限自動 +1
+    growthOnAutoTurns: true, // 自動成長的回合是否還要做成長選擇
+    manaDelay: false, // 擴充的新水晶要下回合才能用
+    secondPlayerPicks: 1, // 後手第一回合的成長選擇次數
+    secondPlayerBonusMana: 0, // 後手第一回合額外多出的暫時費用
+    laneControlDamage: 1, // 回合開始時，每條「只有你有隨從」的路線對敵方英雄造成的傷害
+    trample: true, // 擊殺隨從後多出來的傷害打到敵方英雄
   };
 
   const RESONANCE_ELEMENTS = ['fire', 'water', 'wind', 'earth'];
@@ -224,7 +231,10 @@
 
   function startTurn(s) {
     const p = s.players[s.current];
-    p.mana = p.maxMana;
+    const ownTurn = Math.ceil(s.turn / 2);
+    const autoTurn = ownTurn <= RULES.autoManaTurns;
+    if (autoTurn) p.maxMana = Math.min(RULES.maxMana, p.maxMana + 1);
+    p.mana = p.maxMana + (s.turn === 2 ? RULES.secondPlayerBonusMana : 0);
     p.freeMoves = false;
     for (const m of p.lanes.flat()) {
       m.sleeping = false;
@@ -234,10 +244,19 @@
     }
     s.playedElements = [];
     log(s, `── 第 ${s.turn} 回合：${p.name} ──`);
+    if (RULES.laneControlDamage) {
+      const enemy = s.players[1 - s.current];
+      const held = p.lanes.filter((l, i) => l.length > 0 && enemy.lanes[i].length === 0).length;
+      if (held) {
+        enemy.hp -= held * RULES.laneControlDamage;
+        log(s, `${p.name} 控制 ${held} 條路線，對 ${enemy.name} 造成 ${held * RULES.laneControlDamage} 點傷害`);
+      }
+    }
     drawCards(s, s.current, 1);
-    s.phase = 'growth';
+    s.phase = autoTurn && !RULES.growthOnAutoTurns ? 'main' : 'growth';
     // 後手第一回合可以做兩次不同的成長選擇
-    s.growth = { picksLeft: s.turn === 2 ? 2 : 1, picked: [] };
+    s.growth = { picksLeft: s.turn === 2 ? RULES.secondPlayerPicks : 1, picked: [] };
+    if (s.growth.picksLeft === 0) s.phase = 'main';
     resolveDeaths(s);
   }
 
@@ -389,7 +408,7 @@
         if (!growthOptions(s).includes(action.choice)) throw new Error('不能選這個成長選項');
         if (action.choice === 'mana') {
           p.maxMana += 1;
-          p.mana += 1;
+          if (!RULES.manaDelay) p.mana += 1;
           log(s, `${p.name} 選擇擴充：費用上限變為 ${p.maxMana}`);
         } else if (action.choice === 'draw') {
           log(s, `${p.name} 選擇研讀：多抽 ${RULES.studyDraw} 張牌`);
@@ -444,8 +463,13 @@
         } else {
           const defender = findMinion(s, action.target.uid).minion;
           const back = attackOf(defender);
+          const excess = attackOf(attacker) - Math.max(0, defender.hp);
           damage(s, action.target, attackOf(attacker));
           attacker.hp -= back;
+          if (RULES.trample && excess > 0) {
+            damage(s, { kind: 'hero', player: 1 - me }, excess);
+            log(s, `穿透：${excess} 點傷害打到 ${s.players[1 - me].name}`);
+          }
         }
         break;
       }

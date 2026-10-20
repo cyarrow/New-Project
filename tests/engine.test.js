@@ -35,13 +35,14 @@ function pass(s) {
   return toMain(act(s, { type: 'endTurn' }));
 }
 
-test('開局：先手 3+1 張、後手 4 張，雙方 25 血、0 費', () => {
+test('開局：先手 3+1 張、後手 4 張，雙方 25 血，第一回合自動有 1 費', () => {
   const s = G.createGame({ seed: 42 });
   assert.equal(s.players[0].hand.length, 4);
   assert.equal(s.players[1].hand.length, 4);
   assert.equal(s.players[0].deck.length + s.players[0].hand.length, 20);
   assert.equal(s.players[0].hp, 25);
-  assert.equal(s.players[0].maxMana, 0);
+  assert.equal(s.players[0].maxMana, 1);
+  assert.equal(s.players[0].mana, 1);
   assert.equal(s.phase, 'growth');
 });
 
@@ -54,27 +55,34 @@ test('同一個種子會洗出同樣的牌', () => {
 test('成長：擴充讓費用上限 +1 並立刻可用', () => {
   let s = G.createGame({ seed: 1 });
   s = act(s, { type: 'growth', choice: 'mana' });
-  assert.equal(s.players[0].maxMana, 1);
-  assert.equal(s.players[0].mana, 1);
+  assert.equal(s.players[0].maxMana, 2);
+  assert.equal(s.players[0].mana, 2);
   assert.equal(s.phase, 'main');
 });
 
 test('成長：共鳴增加指定元素', () => {
   let s = G.createGame({ seed: 1 });
   s = act(s, { type: 'growth', choice: 'resonance', element: 'fire' });
-  assert.equal(s.players[0].resonance.fire, 1);
+  assert.equal(s.players[0].resonance.fire, G.RULES.resonanceGain);
 });
 
-test('後手第一回合可以做兩次不同的成長選擇', () => {
+test('費用前 3 回合自動成長，之後只能靠擴充', () => {
   let s = G.createGame({ seed: 1 });
-  s = act(s, { type: 'growth', choice: 'mana' });
-  s = act(s, { type: 'endTurn' });
-  assert.equal(s.growth.picksLeft, 2);
-  s = act(s, { type: 'growth', choice: 'mana' });
-  assert.equal(s.phase, 'growth');
-  assert.throws(() => act(s, { type: 'growth', choice: 'mana' }));
+  const maxAt = [];
+  for (let i = 0; i < 8; i++) {
+    if (s.current === 0) maxAt.push(s.players[0].maxMana);
+    s = act(s, { type: 'growth', choice: 'draw' });
+    s = act(s, { type: 'endTurn' });
+  }
+  assert.deepEqual(maxAt, [1, 2, 3, 3]);
+});
+
+test('後手起始費用 1：第一回合就有 2 費，只做一次成長選擇', () => {
+  let s = G.createGame({ seed: 1 });
   s = act(s, { type: 'growth', choice: 'draw' });
-  assert.equal(s.phase, 'main');
+  s = act(s, { type: 'endTurn' });
+  assert.equal(s.players[1].maxMana, 2);
+  assert.equal(s.growth.picksLeft, 1);
 });
 
 test('原本的狀態不會被修改', () => {
@@ -128,8 +136,33 @@ test('對面路線空著時可以直接打英雄', () => {
   s = play(s, 'mercenary', { lane: 2 });
   s = pass(s);
   const attacker = s.players[0].lanes[0][0];
+  const hp = s.players[1].hp;
   s = act(s, { type: 'attack', uid: attacker.uid, target: hero(1) });
-  assert.equal(s.players[1].hp, 24);
+  assert.equal(s.players[1].hp, hp - 1);
+});
+
+test('路線控制：回合開始時，每條只有自己有隨從的路線對敵方英雄造成 1 點傷害', () => {
+  let s = toMain(setup({ hands: [['recruit', 'recruit'], ['mercenary']] }));
+  s = play(s, 'recruit', { lane: 0 });
+  s = play(s, 'recruit', { lane: 1 });
+  s = pass(s);
+  s = play(s, 'mercenary', { lane: 1 });
+  const hp = s.players[1].hp;
+  s = act(s, { type: 'endTurn' });
+  assert.equal(s.players[1].hp, hp - 1, '只控制左路（中路有敵人）');
+});
+
+test('穿透：擊殺隨從後多出來的傷害打到敵方英雄', () => {
+  let s = toMain(setup({ hands: [['ancient_guard'], ['spark_sprite']] }));
+  s = play(s, 'ancient_guard', { lane: 0 });
+  s = pass(s);
+  s = play(s, 'spark_sprite', { lane: 0 });
+  s = pass(s);
+  const hp = s.players[1].hp;
+  const guard = s.players[0].lanes[0][0];
+  s = act(s, { type: 'attack', uid: guard.uid, target: ref(s.players[1].lanes[0][0]) });
+  assert.equal(s.players[1].lanes[0].length, 0);
+  assert.equal(s.players[1].hp, hp - 3, '4 攻打 1 血，多出 3 點');
 });
 
 test('隨從互打會同時受傷，死亡會被移除', () => {
@@ -213,10 +246,11 @@ test('共鳴：烈焰術在火共鳴 2 時造成 4 點傷害', () => {
   assert.equal(s.players[1].hp, 18);
 });
 
-test('共鳴：山脈巨龜在土共鳴 2 時費用 -2', () => {
+test('共鳴：山脈巨龜在土共鳴 3 時費用 -2', () => {
   const s = setup();
-  assert.equal(G.getCost(s.players[0], 'mountain_turtle'), 6);
   s.players[0].resonance.earth = 2;
+  assert.equal(G.getCost(s.players[0], 'mountain_turtle'), 6);
+  s.players[0].resonance.earth = 3;
   assert.equal(G.getCost(s.players[0], 'mountain_turtle'), 4);
 });
 
