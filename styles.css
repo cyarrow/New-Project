@@ -25,6 +25,16 @@
   --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
   --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
   --font-num: "Chakra Petch", "Noto Sans TC", sans-serif;
+
+  /* 動態：預設不回彈的彈簧（實際曲線由 src/motion.js 依彈簧公式算出後覆寫） */
+  --spring: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring-dur: 380ms;
+  --press: 100ms;
+
+  /* 材質：浮在桌面上的半透明層 */
+  --material: rgb(14 24 29 / 0.72);
+  --material-edge: rgb(255 255 255 / 0.07);
+  --scrim: rgb(5 10 12 / 0.55);
 }
 
 * { box-sizing: border-box; }
@@ -35,9 +45,15 @@ body {
   color: var(--ink);
   font: 15px/1.5 var(--font-body);
 }
-button { font: inherit; color: inherit; cursor: pointer; }
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
 button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-h1, h2 { text-wrap: balance; margin: 0; }
+h1, h2 { text-wrap: balance; margin: 0; line-height: 1.2; }
 .muted { color: var(--ink-dim); }
 
 .el-fire { --el: var(--fire); }
@@ -56,7 +72,10 @@ h1, h2 { text-wrap: balance; margin: 0; }
   white-space: nowrap;
 }
 .btn.primary { background: var(--gold); border-color: var(--gold); color: var(--card-ink); }
-.btn.primary:hover { filter: brightness(1.08); }
+.btn { transition: transform var(--spring-dur) var(--spring), filter 150ms ease; }
+@media (hover: hover) {
+  .btn.primary:hover { filter: brightness(1.08); }
+}
 .btn.ghost { background: transparent; }
 .btn.big { font-size: 1.1rem; padding: 12px 36px; }
 .link { background: none; border: 0; color: var(--ink-dim); text-decoration: underline; padding: 0; }
@@ -86,8 +105,8 @@ h1, h2 { text-wrap: balance; margin: 0; }
   font-family: var(--font-display);
   font-weight: 900;
   font-size: clamp(2.6rem, 9vw, 4.4rem);
-  letter-spacing: 0.12em;
-  line-height: 1.1;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
   background: linear-gradient(100deg, var(--fire), var(--gold) 30%, var(--wind) 55%, var(--water) 80%, var(--earth));
   -webkit-background-clip: text;
   background-clip: text;
@@ -235,7 +254,7 @@ h1, h2 { text-wrap: balance; margin: 0; }
   text-align: center;
   gap: 2px;
   cursor: default;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform var(--spring-dur) var(--spring), box-shadow 200ms ease, background-color 200ms ease, opacity 200ms ease;
 }
 .m-name { font-weight: 700; font-size: 0.82rem; line-height: 1.2; overflow-wrap: anywhere; }
 .m-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; min-height: 1em; }
@@ -250,7 +269,6 @@ h1, h2 { text-wrap: balance; margin: 0; }
   box-shadow: 0 0 0 2px var(--hp), 0 0 14px color-mix(in srgb, var(--hp) 50%, transparent);
   animation: pulse 1.2s ease-in-out infinite;
 }
-.minion.enter { animation: enter 0.3s ease-out; }
 
 .slot {
   min-height: 92px;
@@ -261,7 +279,10 @@ h1, h2 { text-wrap: balance; margin: 0; }
   font-size: 0.8rem;
   padding: 4px;
 }
-.slot:hover { background: color-mix(in srgb, var(--gold) 18%, transparent); }
+.slot { animation: slot-in var(--spring-dur) var(--spring) both; }
+@media (hover: hover) {
+  .slot:hover { background: color-mix(in srgb, var(--gold) 18%, transparent); }
+}
 
 /* 攻擊 / 生命數字（場上與手牌共用） */
 .stats { display: flex; justify-content: space-between; width: 100%; }
@@ -293,7 +314,7 @@ h1, h2 { text-wrap: balance; margin: 0; }
   color: var(--hp);
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
   pointer-events: none;
-  animation: float 1s ease-out forwards;
+  animation: float 1s ease-out 150ms both;
 }
 
 /* 成長選擇 / 行動列 */
@@ -323,7 +344,10 @@ h1, h2 { text-wrap: balance; margin: 0; }
 }
 .growth-opt b { font-family: var(--font-display); font-size: 1.05rem; }
 .growth-opt span { color: var(--ink-dim); font-size: 0.82rem; }
-.growth-opt:hover:not(:disabled) { border-color: var(--gold); }
+.growth-opt { transition: transform var(--spring-dur) var(--spring), border-color 150ms ease; }
+@media (hover: hover) {
+  .growth-opt:hover:not(:disabled) { border-color: var(--gold); }
+}
 .growth-opt:disabled { opacity: 0.4; cursor: not-allowed; }
 .element-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .chip-btn {
@@ -354,6 +378,23 @@ h1, h2 { text-wrap: balance; margin: 0; }
 .thinking { animation: tut 1.1s ease-in-out infinite; }
 @keyframes tut { 50% { outline-color: transparent; opacity: 0.85; } }
 
+/* 底部操作區：浮在戰場上的半透明層，手機上滑動戰場時手牌一直看得到 */
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-inline: -8px;
+  padding: 10px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+  border-radius: 16px 16px 0 0;
+  background: var(--material);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  border-top: 1px solid var(--material-edge);
+}
+
 /* 手牌 */
 .hand { display: flex; gap: 10px; overflow-x: auto; padding: 16px 4px 10px 10px; min-height: 200px; }
 .card {
@@ -372,11 +413,21 @@ h1, h2 { text-wrap: balance; margin: 0; }
   gap: 4px;
   text-align: left;
   opacity: 0.62;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  transition: transform var(--spring-dur) var(--spring), opacity 200ms ease, box-shadow 200ms ease;
 }
 .card.playable { opacity: 1; box-shadow: 0 0 0 2px color-mix(in srgb, var(--heal) 70%, transparent); }
-.card.playable:hover { transform: translateY(-4px); }
-.card.selected { transform: translateY(-8px); box-shadow: 0 0 0 3px var(--gold), 0 8px 18px rgb(0 0 0 / 0.45); }
+@media (hover: hover) {
+  .card.playable:hover { transform: translateY(-4px); }
+}
+.card.selected { transform: translateY(-10px); box-shadow: 0 0 0 3px var(--gold), 0 10px 22px rgb(0 0 0 / 0.45); }
+
+/* 按下的瞬間就回饋（不等放開） */
+.btn:active, .growth-opt:active:not(:disabled), .chip-btn:active, .slot:active, .mode-opt:active, .deck-opt:active,
+.card:active, .minion.can-act:active, .minion.targetable:active, .portrait.targetable:active {
+  transform: scale(0.97);
+  transition: transform var(--press) ease-out;
+}
+.card.selected:active { transform: translateY(-10px) scale(0.97); }
 .cost {
   position: absolute;
   top: -12px;
@@ -421,13 +472,16 @@ h1, h2 { text-wrap: balance; margin: 0; }
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(5 10 12 / 0.7);
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: fade-in 200ms ease-out both;
   display: grid;
   place-items: center;
   padding: 16px;
   z-index: 20;
 }
-.overlay.opaque { background: var(--table); }
+.overlay.opaque { background: var(--table); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .panel {
   background: var(--lane);
   border: 1px solid var(--gold);
@@ -438,8 +492,10 @@ h1, h2 { text-wrap: balance; margin: 0; }
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.5);
+  animation: materialize var(--spring-dur) var(--spring) both;
 }
-.panel h2 { font-family: var(--font-display); font-size: 1.8rem; }
+.panel h2 { font-family: var(--font-display); font-size: 1.8rem; line-height: 1.15; }
 .panel p { margin: 0; color: var(--ink-dim); }
 .eyebrow { font-size: 0.8rem; letter-spacing: 0.2em; color: var(--gold) !important; }
 .panel-actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
@@ -455,13 +511,74 @@ h1, h2 { text-wrap: balance; margin: 0; }
   font-weight: 700;
   z-index: 30;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+  animation: toast-in var(--spring-dur) var(--spring) both;
 }
 
+/* 回合提示：短暫浮現後自動消失，不擋操作 */
+.turn-banner {
+  position: fixed;
+  left: 50%;
+  top: calc(30% + env(safe-area-inset-top, 0px));
+  z-index: 12;
+  pointer-events: none;
+  padding: 10px 28px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  background: var(--material);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--material-edge);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.4);
+  animation: banner 1.5s ease both;
+}
+.turn-banner.mine { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+
+/* 動畫分身（離場、法術飛行） */
+.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 15; }
+.fx-layer .ghost { position: absolute; margin: 0; transition: none; animation: none; }
+.fx-layer .card.ghost { opacity: 1; box-shadow: 0 16px 40px rgb(0 0 0 / 0.5); }
+
 @keyframes pulse { 50% { box-shadow: 0 0 0 2px var(--hp), 0 0 22px color-mix(in srgb, var(--hp) 70%, transparent); } }
-@keyframes enter { from { transform: scale(0.8); opacity: 0; } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes materialize { from { transform: scale(0.94); opacity: 0; filter: blur(6px); } }
+@keyframes toast-in { from { transform: translate(-50%, 16px); opacity: 0; } }
+@keyframes slot-in { from { transform: scale(0.9); opacity: 0; } }
+@keyframes banner {
+  0% { transform: translate(-50%, 12px) scale(0.92); opacity: 0; filter: blur(4px); }
+  18% { transform: translate(-50%, 0) scale(1); opacity: 1; filter: blur(0); }
+  75% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -8px) scale(0.98); opacity: 0; }
+}
 @keyframes float { to { transform: translate(-50%, -24px); opacity: 0; } }
+/* 減少動態：不移動、不縮放，改用淡入淡出 */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  :root { --spring-dur: 1ms; --press: 1ms; }
+  .minion.targetable, .portrait.targetable, .tut-focus, .thinking { animation: none; }
+  .panel, .slot { animation: fade-in 200ms ease both; }
+  .toast { animation: fade-in 200ms ease both; }
+  .turn-banner { animation: banner-fade 1.5s ease both; }
+  .dmg { animation: dmg-fade 1s ease 150ms both; }
+  .btn:active, .growth-opt:active:not(:disabled), .chip-btn:active, .slot:active, .mode-opt:active, .deck-opt:active,
+  .card:active, .minion.can-act:active, .minion.targetable:active, .portrait.targetable:active { transform: none; opacity: 0.8; }
+  .card.selected, .card.selected:active, .minion.selected { transform: none; }
+}
+@keyframes banner-fade { 0%, 100% { opacity: 0; transform: translateX(-50%); } 15%, 75% { opacity: 1; transform: translateX(-50%); } }
+@keyframes dmg-fade { 0% { opacity: 0; } 20%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 減少透明度：材質改成實心 */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --material: var(--table); --scrim: rgb(5 10 12 / 0.85); }
+  .dock, .overlay, .turn-banner { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* 提高對比 */
+@media (prefers-contrast: more) {
+  :root { --line: #5d7682; --ink-dim: #c3d0d5; --material: var(--table); --material-edge: #8fa3ab; }
+  .card { opacity: 0.8; }
 }
 
 /* 窄螢幕 */

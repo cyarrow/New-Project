@@ -5,6 +5,11 @@
   const G = window.ElementGame;
   const AI = window.ElementAI;
   const T = window.ElementTutorial;
+  const M = window.ElementMotion;
+  if (!M.reduceMotion.matches) {
+    document.documentElement.style.setProperty('--spring', M.SPRING.easing);
+    document.documentElement.style.setProperty('--spring-dur', `${M.SPRING.duration}ms`);
+  }
   const { CARDS, DECKS, ELEMENTS, KEYWORDS, LANE_NAMES, RULES } = G;
   const app = document.getElementById('app');
 
@@ -23,12 +28,14 @@
   let pickingElement = false;
   let aiTimer = null;
   let toastText = '';
+  let toastId = 0;
   let toastTimer = null;
-  const seen = new Set();
+  let hitSeq = 0;
   const lastHp = new Map();
 
   const esc = (str) => String(str).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const sameRef = (a, b) => a.kind === b.kind && (a.kind === 'hero' ? a.player === b.player : a.uid === b.uid);
+  const refKey = (ref) => (!ref ? null : ref.kind === 'hero' ? `p${ref.player}` : `m${ref.uid}`);
 
   // 畫面下方是誰：雙人同機時跟著目前玩家，其他模式固定是玩家 1
   const viewer = () => (mode === 'hotseat' ? game.current : 0);
@@ -63,7 +70,8 @@
   function hitMark(key, hp) {
     const prev = lastHp.get(key);
     lastHp.set(key, hp);
-    return prev !== undefined && hp < prev ? `<span class="dmg" aria-hidden="true">-${prev - hp}</span>` : '';
+    return prev !== undefined && hp < prev
+      ? `<span class="dmg" data-key="dmg${++hitSeq}" aria-hidden="true">-${prev - hp}</span>` : '';
   }
 
   function heroBar(p, sel, isMe) {
@@ -79,10 +87,10 @@
       .map((el) => `<span class="chip el-${el}">${ELEMENTS[el].name} ${player.resonance[el]}</span>`)
       .join('');
     return `
-      <div class="hero-bar ${isMe ? 'me' : 'opp'} ${game.current === p && game.phase !== 'over' ? 'active' : ''}">
-        <button class="portrait ${targetable ? 'targetable' : ''}" data-action="hero" data-player="${p}"
+      <div class="hero-bar ${isMe ? 'me' : 'opp'} ${game.current === p && game.phase !== 'over' ? 'active' : ''}" data-key="hero${p}">
+        <button class="portrait ${targetable ? 'targetable' : ''}" data-action="hero" data-player="${p}" data-key="p${p}"
           ${targetable ? '' : 'tabindex="-1"'} aria-label="${esc(player.name)}，生命 ${player.hp}">
-          <span class="hp-num">${player.hp}</span>${hitMark(`h${p}`, player.hp)}
+          <span class="hp-num">${Math.max(0, player.hp)}</span>${hitMark(`h${p}`, player.hp)}
         </button>
         <div class="hero-info">
           <div class="hero-name">${esc(player.name)} <span class="deck-name">${DECKS[player.deckId].name}</span></div>
@@ -90,7 +98,7 @@
             <span class="mana-num">${player.mana}/${player.maxMana}</span></div>
           <div class="resonance">${res || '<span class="muted">尚無共鳴</span>'}</div>
         </div>
-        <div class="piles">
+        <div class="piles" data-key="pile${p}">
           <span><b>${player.hand.length}</b> 手牌</span>
           <span><b>${player.deck.length}</b> 牌庫</span>
         </div>
@@ -109,12 +117,11 @@
     }
     if (m.frozen) classes.push('frozen');
     if (owner === game.current && m.sleeping) classes.push('sleeping');
-    if (!seen.has(m.uid)) classes.push('enter');
     const tags = [...new Set([...m.keywords, ...m.tempKeywords])].map((k) => KEYWORDS[k]);
     if (m.frozen) tags.push('凍結');
     const atk = G.attackOf(m);
     return `
-      <button class="${classes.join(' ')}" data-action="minion" data-uid="${m.uid}" data-card="${m.cardId}" data-owner="${owner}"
+      <button class="${classes.join(' ')}" data-action="minion" data-uid="${m.uid}" data-key="m${m.uid}" data-card="${m.cardId}" data-owner="${owner}"
         title="${esc(def.name)}${def.text ? '：' + esc(def.text) : ''}">
         <span class="m-name">${def.name}</span>
         <span class="m-tags">${tags.map((t) => `<em>${t}</em>`).join('')}</span>
@@ -132,32 +139,36 @@
     const enemy = game.players[opp].lanes[i].map((m) => minionTile(m, opp, sel)).join('');
     const mine = game.players[me].lanes[i].map((m) => minionTile(m, me, sel)).join('');
     const place = sel.lanes.includes(i)
-      ? `<button class="slot place" data-action="place" data-lane="${i}">放在這裡</button>` : '';
+      ? `<button class="slot place" data-action="place" data-lane="${i}" data-key="place${i}">放在這裡</button>` : '';
     const move = sel.moves.includes(i)
-      ? `<button class="slot place" data-action="move" data-lane="${i}">移到這裡（${G.moveCost(game)} 費）</button>` : '';
+      ? `<button class="slot place" data-action="move" data-lane="${i}" data-key="move${i}">移到這裡（${G.moveCost(game)} 費）</button>` : '';
     return `
-      <div class="lane">
+      <div class="lane" data-key="lane${i}">
         <div class="lane-half enemy">${enemy}</div>
         <div class="lane-label">${LANE_NAMES[i]}</div>
         <div class="lane-half mine">${mine}${place}${move}</div>
       </div>`;
   }
 
-  function handCard(c) {
-    const def = CARDS[c.cardId];
-    const player = game.players[viewer()];
-    const cost = G.getCost(player, c.cardId);
-    const playable = humanTurn() && game.phase === 'main' && !G.playBlocker(game, c.uid);
-    const isSel = selected && selected.kind === 'hand' && selected.uid === c.uid;
+  function cardFace(cardId, cost, attrs = '', extra = '') {
+    const def = CARDS[cardId];
     return `
-      <button class="card el-${def.element} ${playable ? 'playable' : ''} ${isSel ? 'selected' : ''}"
-        data-action="hand" data-uid="${c.uid}" data-card="${c.cardId}">
+      <button class="card el-${def.element} ${extra}" ${attrs}>
         <span class="cost ${cost < def.cost ? 'reduced' : ''}"><span>${cost}</span></span>
         <span class="c-name">${def.name}</span>
         <span class="c-type">${ELEMENTS[def.element].name} · ${def.type === 'minion' ? '隨從' : '法術'}</span>
         <span class="c-text">${esc(def.text)}</span>
         ${def.type === 'minion' ? `<span class="stats"><span class="atk">${def.atk}</span><span class="hp">${def.hp}</span></span>` : ''}
       </button>`;
+  }
+
+  function handCard(c) {
+    const player = game.players[viewer()];
+    const playable = humanTurn() && game.phase === 'main' && !G.playBlocker(game, c.uid);
+    const isSel = selected && selected.kind === 'hand' && selected.uid === c.uid;
+    return cardFace(c.cardId, G.getCost(player, c.cardId),
+      `data-action="hand" data-uid="${c.uid}" data-key="c${c.uid}" data-card="${c.cardId}"`,
+      `${playable ? 'playable' : ''} ${isSel ? 'selected' : ''}`);
   }
 
   function growthPanel() {
@@ -227,7 +238,7 @@
   }
 
   // ── 畫面 ──
-  function renderSetup() {
+  function setupHtml() {
     const m = settings.mode;
     const seat = (i) => {
       const isAi = m === 'ai' && i === 1;
@@ -245,8 +256,8 @@
         </div>
       </fieldset>`;
     };
-    app.innerHTML = `
-      <main class="setup">
+    return `
+      <main class="setup" data-key="setup">
         <h1 class="logo">元素戰線</h1>
         <p class="tagline">每回合三選一：擴充費用、多抽一張、或累積元素共鳴。把隨從排進三條戰線，先打倒對方英雄的人獲勝。</p>
         <div class="modes" role="radiogroup" aria-label="遊戲模式">
@@ -286,7 +297,7 @@
           <div class="panel">
             <p class="eyebrow">第 ${game.turn} 回合結束</p>
             <h2>${title}</h2>
-            <p>${esc(game.players[0].name)} 剩 ${game.players[0].hp} 血，${esc(game.players[1].name)} 剩 ${game.players[1].hp} 血。</p>
+            <p>${esc(game.players[0].name)} 剩 ${Math.max(0, game.players[0].hp)} 血，${esc(game.players[1].name)} 剩 ${Math.max(0, game.players[1].hp)} 血。</p>
             <div class="panel-actions">
               <button class="btn primary" data-action="again">再來一局</button>
               <button class="btn ghost" data-action="menu">回到選單</button>
@@ -308,57 +319,80 @@
     return '';
   }
 
-  function renderGame() {
+  function turnBanner() {
+    if (game.phase === 'over' || (mode === 'hotseat' && !settings.soloTest)) return '';
+    const name = game.players[game.current].name;
+    const text = mode !== 'hotseat' && humanTurn() ? '你的回合' : `${esc(name)}的回合`;
+    return `<div class="turn-banner ${humanTurn() ? 'mine' : ''}" data-key="banner${game.turn}" role="status">${text}</div>`;
+  }
+
+  function gameHtml() {
     const me = viewer();
     const sel = selection();
     const logItems = game.log.slice(-60).reverse().map((l) => `<li class="${l.startsWith('──') ? 'turn' : ''}">${esc(l)}</li>`).join('');
     const showGrowth = game.phase === 'growth' && humanTurn();
-
-    app.innerHTML = `
-      <div class="game">
+    return `
+      <div class="game" data-key="game">
         <div class="board">
           ${heroBar(1 - me, sel, false)}
           <section class="field" aria-label="戰場">${[0, 1, 2].map((i) => lane(i, sel)).join('')}</section>
           ${heroBar(me, sel, true)}
-          ${tutorPanel()}
-          ${showGrowth ? growthPanel() : actionBar(sel)}
-          <section class="hand" aria-label="手牌">${game.players[me].hand.map(handCard).join('') || '<p class="muted">沒有手牌</p>'}</section>
+          <div class="dock">
+            ${tutorPanel()}
+            ${showGrowth ? growthPanel() : actionBar(sel)}
+            <section class="hand" aria-label="手牌">${game.players[me].hand.map(handCard).join('') || '<p class="muted">沒有手牌</p>'}</section>
+          </div>
         </div>
         <aside class="log" aria-label="戰鬥紀錄">
           <div class="log-head"><h2>戰鬥紀錄</h2><button class="link" data-action="menu">回到選單</button></div>
           <ol>${logItems}</ol>
         </aside>
       </div>
+      ${turnBanner()}
       ${overlayHtml()}`;
-
-    for (const p of game.players) for (const m of p.lanes.flat()) seen.add(m.uid);
-
-    const step = tutorialStep();
-    if (step && humanTurn()) {
-      for (const sel of step.focus || []) app.querySelectorAll(sel).forEach((el) => el.classList.add('tut-focus'));
-    }
   }
 
-  function render() {
-    if (game) renderGame();
-    else renderSetup();
-    if (toastText) {
-      const t = document.createElement('div');
-      t.className = 'toast';
-      t.setAttribute('role', 'status');
-      t.textContent = toastText;
-      app.appendChild(t);
+  // fx：這次行動要播放的動畫資訊（見 actionFx）
+  function render(fx = {}) {
+    const before = M.capture(app);
+    let html = game ? gameHtml() : setupHtml();
+    if (toastText) html += `<div class="toast" role="status" data-key="toast${toastId}">${esc(toastText)}</div>`;
+    M.morph(app, html);
+    const step = tutorialStep();
+    if (game && step && humanTurn()) {
+      for (const sel of step.focus || []) app.querySelectorAll(sel).forEach((el) => el.classList.add('tut-focus'));
     }
+    if (game) M.animate(app, before, Object.assign({ deckKey: `pile${viewer()}` }, fx));
   }
 
   function toast(text) {
     toastText = text;
+    toastId += 1;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
       toastText = '';
-      const t = app.querySelector('.toast');
-      if (t) t.remove();
+      render();
     }, 2200);
+  }
+
+  // 出牌從哪裡飛出來、攻擊誰，給動畫用
+  function actionFx(action) {
+    const fx = {};
+    const p = game.current;
+    if (action.type === 'play') {
+      const card = game.players[p].hand.find((c) => c.uid === action.uid);
+      const fromKey = p === viewer() ? `c${action.uid}` : `pile${p}`;
+      if (card && CARDS[card.cardId].type === 'spell') {
+        const holder = document.createElement('div');
+        holder.innerHTML = cardFace(card.cardId, G.getCost(game.players[p], card.cardId));
+        fx.spell = { card: holder.firstElementChild, fromKey, targetKey: refKey(action.target), reveal: p !== viewer() };
+      } else {
+        fx.sourceKey = fromKey;
+      }
+    } else if (action.type === 'attack') {
+      fx.attack = { key: `m${action.uid}`, targetKey: refKey(action.target) };
+    }
+    return fx;
   }
 
   // ── 電腦 / 教學對手的回合 ──
@@ -368,12 +402,15 @@
     aiTimer = setTimeout(() => {
       let action = tutorial ? T.opponentAction(game, tutorial.scriptIndex++) : null;
       if (!action) action = AI.nextAction(game);
+      let fx = {};
       try {
+        fx = actionFx(action);
         game = G.applyAction(game, action);
       } catch (err) {
+        fx = {};
         game = G.applyAction(game, { type: 'endTurn' });
       }
-      render();
+      render(fx);
       runOpponent();
     }, game.phase === 'growth' ? 500 : 850);
   }
@@ -389,7 +426,9 @@
       selected = null;
       return render();
     }
+    let fx = {};
     try {
+      fx = actionFx(action);
       game = G.applyAction(game, action);
       selected = null;
       if (step) tutorial.step += 1;
@@ -397,7 +436,7 @@
     } catch (err) {
       toast(err.message);
     }
-    render();
+    render(fx);
     runOpponent();
   }
 
@@ -414,7 +453,6 @@
 
   function startMode(m) {
     clearTimeout(aiTimer);
-    seen.clear();
     lastHp.clear();
     selected = null;
     pickingElement = false;

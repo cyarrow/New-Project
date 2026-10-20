@@ -37,6 +37,7 @@
 | `src/ai.js` | 電腦玩家 |
 | `src/tutorial.js` | 新手教學的步驟與對手劇本 |
 | `src/ui.js` | 畫面與操作 |
+| `src/motion.js` | 畫面局部更新與動畫（彈簧曲線、出牌飛行、攻擊衝撞、陣亡淡出） |
 | `styles.css` | 外觀 |
 | `tests/` | 自動測試 |
 | `tools/` | 平衡模擬工具 |
