@@ -128,6 +128,23 @@ h1, h2 { text-wrap: balance; margin: 0; }
 .rules li + li { margin-top: 6px; }
 .rules b { color: var(--ink); }
 
+.modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; width: 100%; }
+.mode-opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--lane);
+  cursor: pointer;
+}
+.mode-opt:has(input:checked) { border-color: var(--gold); background: var(--tile); }
+.mode-opt input { margin-top: 4px; }
+.mode-opt span { display: flex; flex-direction: column; }
+.mode-opt b { font-family: var(--font-display); font-size: 1.1rem; }
+.mode-opt small { color: var(--ink-dim); }
+
 /* ── 對局版面 ── */
 .game {
   display: grid;
@@ -319,6 +336,23 @@ h1, h2 { text-wrap: balance; margin: 0; }
 }
 .action-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 42px; }
 .hint { flex: 1; min-width: 12em; color: var(--ink-dim); }
+
+/* 新手教學 */
+.tutor {
+  border-radius: 12px;
+  border: 1px solid var(--focus);
+  background: color-mix(in srgb, var(--focus) 10%, var(--lane));
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tutor p { margin: 0; max-width: 46em; }
+.tutor-step { font-size: 0.78rem; letter-spacing: 0.15em; color: var(--focus); font-weight: 700; }
+.tutor-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.tut-focus { outline: 3px solid var(--focus); outline-offset: 3px; animation: tut 1.1s ease-in-out infinite; }
+.thinking { animation: tut 1.1s ease-in-out infinite; }
+@keyframes tut { 50% { outline-color: transparent; opacity: 0.85; } }
 
 /* 手牌 */
 .hand { display: flex; gap: 10px; overflow-x: auto; padding: 16px 4px 10px 10px; min-height: 200px; }

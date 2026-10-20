@@ -13,7 +13,10 @@
     laneSize: 2,
     handLimit: 8,
     startHand: [3, 4],
+    startMana: [0, 1], // 後手補償：起始費用上限 1（模擬顯示先手勝率從 67% 降到 46%）
     moveCost: 1,
+    studyDraw: 1,
+    resonanceGain: 1,
   };
 
   const RESONANCE_ELEMENTS = ['fire', 'water', 'wind', 'earth'];
@@ -261,7 +264,7 @@
         name: names[i],
         deckId: deckIds[i],
         hp: RULES.startHp,
-        maxMana: 0,
+        maxMana: RULES.startMana[i],
         mana: 0,
         deck: shuffle(s, deck.cards.map((cardId) => ({ uid: s.nextUid++, cardId }))),
         hand: [],
@@ -389,11 +392,11 @@
           p.mana += 1;
           log(s, `${p.name} 選擇擴充：費用上限變為 ${p.maxMana}`);
         } else if (action.choice === 'draw') {
-          log(s, `${p.name} 選擇研讀：多抽 1 張牌`);
-          drawCards(s, me, 1);
+          log(s, `${p.name} 選擇研讀：多抽 ${RULES.studyDraw} 張牌`);
+          drawCards(s, me, RULES.studyDraw);
         } else {
           if (!RESONANCE_ELEMENTS.includes(action.element)) throw new Error('請選擇要共鳴的元素');
-          p.resonance[action.element] += 1;
+          p.resonance[action.element] += RULES.resonanceGain;
           log(s, `${p.name} 選擇共鳴：${ELEMENTS[action.element].name}共鳴 ${p.resonance[action.element]}`);
         }
         s.growth.picked.push(action.choice);

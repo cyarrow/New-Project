@@ -3,14 +3,25 @@
   'use strict';
 
   const G = window.ElementGame;
+  const AI = window.ElementAI;
+  const T = window.ElementTutorial;
   const { CARDS, DECKS, ELEMENTS, KEYWORDS, LANE_NAMES, RULES } = G;
   const app = document.getElementById('app');
 
+  const MODES = {
+    tutorial: { name: '新手教學', desc: '第一次玩從這裡開始，大約 3 分鐘' },
+    ai: { name: '對戰電腦', desc: '一個人練習，電腦當對手' },
+    hotseat: { name: '雙人同機', desc: '和朋友用同一台電腦輪流玩' },
+  };
+
+  let settings = { mode: 'tutorial', decks: ['gale', 'deeprock'], names: ['玩家 1', '玩家 2'], soloTest: false };
   let game = null;
-  let settings = { decks: ['gale', 'deeprock'], names: ['玩家 1', '玩家 2'], soloTest: false };
+  let mode = null; // 目前這局的模式
+  let tutorial = null; // { step, scriptIndex }
   let selected = null; // { kind: 'hand' | 'minion', uid }
   let handoff = false;
   let pickingElement = false;
+  let aiTimer = null;
   let toastText = '';
   let toastTimer = null;
   const seen = new Set();
@@ -19,10 +30,15 @@
   const esc = (str) => String(str).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const sameRef = (a, b) => a.kind === b.kind && (a.kind === 'hero' ? a.player === b.player : a.uid === b.uid);
 
+  // 畫面下方是誰：雙人同機時跟著目前玩家，其他模式固定是玩家 1
+  const viewer = () => (mode === 'hotseat' ? game.current : 0);
+  const humanTurn = () => game.phase !== 'over' && game.current === viewer();
+  const tutorialStep = () => (tutorial ? T.STEPS[tutorial.step] : null);
+
   // ── 選取狀態推導出的提示 ──
   function selection() {
     const info = { targets: [], lanes: [], moves: [], hint: '' };
-    if (!game || game.phase !== 'main' || !selected) return info;
+    if (!game || game.phase !== 'main' || !selected || !humanTurn()) return info;
     if (selected.kind === 'hand') {
       const card = game.players[game.current].hand.find((c) => c.uid === selected.uid);
       const def = CARDS[card.cardId];
@@ -44,10 +60,6 @@
   }
 
   // ── 元件 ──
-  function elementChip(el) {
-    return `<span class="chip el-${el}">${ELEMENTS[el].name}</span>`;
-  }
-
   function hitMark(key, hp) {
     const prev = lastHp.get(key);
     lastHp.set(key, hp);
@@ -88,7 +100,7 @@
   function minionTile(m, owner, sel) {
     const def = CARDS[m.cardId];
     const ref = { kind: 'minion', uid: m.uid };
-    const mine = owner === game.current;
+    const mine = owner === game.current && humanTurn();
     const classes = ['minion', `el-${def.element}`];
     if (sel.targets.some((t) => sameRef(t, ref))) classes.push('targetable');
     if (selected && selected.kind === 'minion' && selected.uid === m.uid) classes.push('selected');
@@ -96,13 +108,13 @@
       classes.push('can-act');
     }
     if (m.frozen) classes.push('frozen');
-    if (mine && m.sleeping) classes.push('sleeping');
+    if (owner === game.current && m.sleeping) classes.push('sleeping');
     if (!seen.has(m.uid)) classes.push('enter');
     const tags = [...new Set([...m.keywords, ...m.tempKeywords])].map((k) => KEYWORDS[k]);
     if (m.frozen) tags.push('凍結');
     const atk = G.attackOf(m);
     return `
-      <button class="${classes.join(' ')}" data-action="minion" data-uid="${m.uid}"
+      <button class="${classes.join(' ')}" data-action="minion" data-uid="${m.uid}" data-card="${m.cardId}" data-owner="${owner}"
         title="${esc(def.name)}${def.text ? '：' + esc(def.text) : ''}">
         <span class="m-name">${def.name}</span>
         <span class="m-tags">${tags.map((t) => `<em>${t}</em>`).join('')}</span>
@@ -115,7 +127,7 @@
   }
 
   function lane(i, sel) {
-    const me = game.current;
+    const me = viewer();
     const opp = 1 - me;
     const enemy = game.players[opp].lanes[i].map((m) => minionTile(m, opp, sel)).join('');
     const mine = game.players[me].lanes[i].map((m) => minionTile(m, me, sel)).join('');
@@ -133,13 +145,13 @@
 
   function handCard(c) {
     const def = CARDS[c.cardId];
-    const player = game.players[game.current];
+    const player = game.players[viewer()];
     const cost = G.getCost(player, c.cardId);
-    const playable = game.phase === 'main' && !G.playBlocker(game, c.uid);
+    const playable = humanTurn() && game.phase === 'main' && !G.playBlocker(game, c.uid);
     const isSel = selected && selected.kind === 'hand' && selected.uid === c.uid;
     return `
       <button class="card el-${def.element} ${playable ? 'playable' : ''} ${isSel ? 'selected' : ''}"
-        data-action="hand" data-uid="${c.uid}">
+        data-action="hand" data-uid="${c.uid}" data-card="${c.cardId}">
         <span class="cost ${cost < def.cost ? 'reduced' : ''}"><span>${cost}</span></span>
         <span class="c-name">${def.name}</span>
         <span class="c-type">${ELEMENTS[def.element].name} · ${def.type === 'minion' ? '隨從' : '法術'}</span>
@@ -170,14 +182,17 @@
         </div>
         <div class="growth-opts">
           ${btn('mana', '擴充', player.maxMana >= RULES.maxMana ? '費用已達上限' : `費用上限 ${player.maxMana} → ${player.maxMana + 1}`)}
-          ${btn('draw', '研讀', '多抽 1 張牌')}
-          ${btn('resonance', '共鳴', '選一個元素，共鳴值 +1')}
+          ${btn('draw', '研讀', `多抽 ${RULES.studyDraw} 張牌`)}
+          ${btn('resonance', '共鳴', `選一個元素，共鳴值 +${RULES.resonanceGain}`)}
         </div>
         ${picker}
       </section>`;
   }
 
   function actionBar(sel) {
+    if (!humanTurn()) {
+      return `<div class="action-bar"><span class="hint thinking">${esc(game.players[game.current].name)} 行動中…</span></div>`;
+    }
     const hint = sel.hint || '點手牌出牌，點自己的隨從攻擊或移動';
     return `
       <div class="action-bar">
@@ -187,13 +202,40 @@
       </div>`;
   }
 
+  function tutorPanel() {
+    if (!tutorial) return '';
+    const total = T.STEPS.length;
+    if (tutorial.step >= total) {
+      return `
+        <section class="tutor done" aria-live="polite">
+          <span class="tutor-step">教學完成</span>
+          <p>你已經學會所有基本規則了！可以把這局打完，或開始一場正式的對戰。</p>
+          <div class="tutor-actions">
+            <button class="btn primary" data-action="tut-continue">繼續打完這局</button>
+            <button class="btn ghost" data-action="tut-ai">對戰電腦（新的一局）</button>
+          </div>
+        </section>`;
+    }
+    const step = tutorialStep();
+    const waiting = !humanTurn();
+    return `
+      <section class="tutor" aria-live="polite">
+        <span class="tutor-step">教學 ${tutorial.step + 1} / ${total}</span>
+        <p>${waiting ? '教官正在行動，看看他做了什麼…' : esc(step.text)}</p>
+        ${!step.expect && !waiting ? '<div class="tutor-actions"><button class="btn primary" data-action="tut-next">下一步</button></div>' : ''}
+      </section>`;
+  }
+
   // ── 畫面 ──
   function renderSetup() {
-    const seat = (i) => `
+    const m = settings.mode;
+    const seat = (i) => {
+      const isAi = m === 'ai' && i === 1;
+      return `
       <fieldset class="seat">
-        <legend>${i === 0 ? '先手' : '後手'}</legend>
-        <label class="field-label" for="name-${i}">名字</label>
-        <input id="name-${i}" type="text" maxlength="12" value="${esc(settings.names[i])}">
+        <legend>${isAi ? '電腦（後手）' : m === 'ai' ? '你（先手）' : i === 0 ? '先手' : '後手'}</legend>
+        ${isAi ? '' : `<label class="field-label" for="name-${i}">名字</label>
+        <input id="name-${i}" type="text" maxlength="12" value="${esc(settings.names[i])}">`}
         <div class="deck-opts" role="radiogroup" aria-label="選擇牌組">
           ${Object.entries(DECKS).map(([id, d]) => `
             <label class="deck-opt">
@@ -202,18 +244,26 @@
             </label>`).join('')}
         </div>
       </fieldset>`;
+    };
     app.innerHTML = `
       <main class="setup">
         <h1 class="logo">元素戰線</h1>
         <p class="tagline">每回合三選一：擴充費用、多抽一張、或累積元素共鳴。把隨從排進三條戰線，先打倒對方英雄的人獲勝。</p>
-        <div class="seats">${seat(0)}${seat(1)}</div>
-        <label class="check"><input type="checkbox" id="solo-test" ${settings.soloTest ? 'checked' : ''}>
-          一個人測試（跳過換人畫面）</label>
-        <button class="btn primary big" data-action="start">開始對戰</button>
+        <div class="modes" role="radiogroup" aria-label="遊戲模式">
+          ${Object.entries(MODES).map(([id, info]) => `
+            <label class="mode-opt">
+              <input type="radio" name="mode" id="mode-${id}" value="${id}" ${m === id ? 'checked' : ''}>
+              <span><b>${info.name}</b><small>${info.desc}</small></span>
+            </label>`).join('')}
+        </div>
+        ${m === 'tutorial' ? '' : `<div class="seats">${seat(0)}${seat(1)}</div>`}
+        ${m === 'hotseat' ? `<label class="check"><input type="checkbox" id="solo-test" ${settings.soloTest ? 'checked' : ''}>
+          一個人測試（跳過換人畫面）</label>` : ''}
+        <button class="btn primary big" data-action="start">${m === 'tutorial' ? '開始教學' : '開始對戰'}</button>
         <details class="rules">
           <summary>規則速覽</summary>
           <ul>
-            <li>英雄 ${RULES.startHp} 血，牌組 20 張，費用最多 ${RULES.maxMana} 點。先手起手 3 張、後手 4 張。</li>
+            <li>英雄 ${RULES.startHp} 血，牌組 20 張，費用最多 ${RULES.maxMana} 點。先手起手 3 張；後手起手 4 張、起始費用 1，第一回合可以做兩次成長選擇。</li>
             <li>每回合開始抽 1 張，然後做一次<b>成長選擇</b>：擴充（費用上限 +1）、研讀（多抽 1 張）或共鳴（某元素 +1）。費用不會自動成長。</li>
             <li>戰場分左、中、右三路，每路每方最多 2 隻隨從。隨從只能攻擊同一路的敵人；同一路沒有敵人時才能打英雄。</li>
             <li>花 1 費可以把隨從移到相鄰的路，移動後本回合不能攻擊。</li>
@@ -224,16 +274,14 @@
       </main>`;
   }
 
-  function renderGame() {
-    const me = game.current;
-    const sel = selection();
-    const player = game.players[me];
-    const logItems = game.log.slice(-60).reverse().map((l) => `<li class="${l.startsWith('──') ? 'turn' : ''}">${esc(l)}</li>`).join('');
-
-    let overlay = '';
+  function overlayHtml() {
+    const player = game.players[game.current];
     if (game.phase === 'over') {
-      const title = game.winner === 'draw' ? '平手' : `${esc(game.players[game.winner].name)} 獲勝`;
-      overlay = `
+      let title;
+      if (game.winner === 'draw') title = '平手';
+      else if (mode === 'hotseat') title = `${esc(game.players[game.winner].name)} 獲勝`;
+      else title = game.winner === 0 ? '你贏了！' : `${esc(game.players[1].name)} 獲勝`;
+      return `
         <div class="overlay" role="dialog" aria-modal="true" aria-label="對局結束">
           <div class="panel">
             <p class="eyebrow">第 ${game.turn} 回合結束</p>
@@ -245,8 +293,9 @@
             </div>
           </div>
         </div>`;
-    } else if (handoff) {
-      overlay = `
+    }
+    if (handoff) {
+      return `
         <div class="overlay opaque" role="dialog" aria-modal="true" aria-label="換人">
           <div class="panel">
             <p class="eyebrow">第 ${game.turn} 回合</p>
@@ -256,6 +305,14 @@
           </div>
         </div>`;
     }
+    return '';
+  }
+
+  function renderGame() {
+    const me = viewer();
+    const sel = selection();
+    const logItems = game.log.slice(-60).reverse().map((l) => `<li class="${l.startsWith('──') ? 'turn' : ''}">${esc(l)}</li>`).join('');
+    const showGrowth = game.phase === 'growth' && humanTurn();
 
     app.innerHTML = `
       <div class="game">
@@ -263,17 +320,23 @@
           ${heroBar(1 - me, sel, false)}
           <section class="field" aria-label="戰場">${[0, 1, 2].map((i) => lane(i, sel)).join('')}</section>
           ${heroBar(me, sel, true)}
-          ${game.phase === 'growth' ? growthPanel() : actionBar(sel)}
-          <section class="hand" aria-label="手牌">${player.hand.map(handCard).join('') || '<p class="muted">沒有手牌</p>'}</section>
+          ${tutorPanel()}
+          ${showGrowth ? growthPanel() : actionBar(sel)}
+          <section class="hand" aria-label="手牌">${game.players[me].hand.map(handCard).join('') || '<p class="muted">沒有手牌</p>'}</section>
         </div>
         <aside class="log" aria-label="戰鬥紀錄">
           <div class="log-head"><h2>戰鬥紀錄</h2><button class="link" data-action="menu">回到選單</button></div>
           <ol>${logItems}</ol>
         </aside>
       </div>
-      ${overlay}`;
+      ${overlayHtml()}`;
 
     for (const p of game.players) for (const m of p.lanes.flat()) seen.add(m.uid);
+
+    const step = tutorialStep();
+    if (step && humanTurn()) {
+      for (const sel of step.focus || []) app.querySelectorAll(sel).forEach((el) => el.classList.add('tut-focus'));
+    }
   }
 
   function render() {
@@ -298,24 +361,76 @@
     }, 2200);
   }
 
+  // ── 電腦 / 教學對手的回合 ──
+  function runOpponent() {
+    clearTimeout(aiTimer);
+    if (!game || game.phase === 'over' || mode === 'hotseat' || game.current === 0) return;
+    aiTimer = setTimeout(() => {
+      let action = tutorial ? T.opponentAction(game, tutorial.scriptIndex++) : null;
+      if (!action) action = AI.nextAction(game);
+      try {
+        game = G.applyAction(game, action);
+      } catch (err) {
+        game = G.applyAction(game, { type: 'endTurn' });
+      }
+      render();
+      runOpponent();
+    }, game.phase === 'growth' ? 500 : 850);
+  }
+
   function dispatch(action) {
+    const step = tutorialStep();
+    if (step && !step.expect) {
+      toast('先看完教學說明，再按「下一步」');
+      return render();
+    }
+    if (step && !step.expect(action, game)) {
+      toast('先照著上方的教學提示操作喔');
+      selected = null;
+      return render();
+    }
     try {
       game = G.applyAction(game, action);
       selected = null;
+      if (step) tutorial.step += 1;
+      if (tutorial && action.type === 'endTurn') tutorial.scriptIndex = 0;
     } catch (err) {
       toast(err.message);
     }
     render();
+    runOpponent();
   }
 
-  function newGame() {
+  function readSetup() {
+    for (let i = 0; i < 2; i++) {
+      const name = document.getElementById(`name-${i}`);
+      if (name) settings.names[i] = name.value.trim() || `玩家 ${i + 1}`;
+      const deck = document.querySelector(`input[name="deck-${i}"]:checked`);
+      if (deck) settings.decks[i] = deck.value;
+    }
+    const solo = document.getElementById('solo-test');
+    if (solo) settings.soloTest = solo.checked;
+  }
+
+  function startMode(m) {
+    clearTimeout(aiTimer);
     seen.clear();
     lastHp.clear();
     selected = null;
     pickingElement = false;
-    game = G.createGame({ decks: settings.decks, names: settings.names });
-    handoff = !settings.soloTest;
+    mode = m;
+    tutorial = null;
+    handoff = false;
+    if (m === 'tutorial') {
+      game = T.createTutorialGame();
+      tutorial = { step: 0, scriptIndex: 0 };
+    } else {
+      const names = m === 'ai' ? [settings.names[0], '電腦'] : settings.names.slice();
+      game = G.createGame({ decks: settings.decks, names });
+      handoff = m === 'hotseat' && !settings.soloTest;
+    }
     render();
+    runOpponent();
   }
 
   // ── 點擊處理 ──
@@ -324,14 +439,13 @@
     else dispatch({ type: 'attack', uid: selected.uid, target: ref });
   }
 
+  // 只有輪到真人玩家時才能操作的動作
+  const PLAYER_ACTIONS = new Set(['hand', 'place', 'move', 'minion', 'hero', 'growth', 'resonate', 'end']);
+
   const handlers = {
     start() {
-      for (let i = 0; i < 2; i++) {
-        settings.names[i] = document.getElementById(`name-${i}`).value.trim() || `玩家 ${i + 1}`;
-        settings.decks[i] = document.querySelector(`input[name="deck-${i}"]:checked`).value;
-      }
-      settings.soloTest = document.getElementById('solo-test').checked;
-      newGame();
+      readSetup();
+      startMode(settings.mode);
     },
     hand(el) {
       const uid = Number(el.dataset.uid);
@@ -356,8 +470,7 @@
     minion(el) {
       const uid = Number(el.dataset.uid);
       const ref = { kind: 'minion', uid };
-      const sel = selection();
-      if (sel.targets.some((t) => sameRef(t, ref))) return onTarget(ref);
+      if (selection().targets.some((t) => sameRef(t, ref))) return onTarget(ref);
       if (selected && selected.kind === 'minion' && selected.uid === uid) {
         selected = null;
         return render();
@@ -397,7 +510,7 @@
     },
     end() {
       dispatch({ type: 'endTurn' });
-      if (game.phase !== 'over' && !settings.soloTest) {
+      if (mode === 'hotseat' && game.phase !== 'over' && !settings.soloTest) {
         handoff = true;
         render();
       }
@@ -406,20 +519,48 @@
       handoff = false;
       render();
     },
-    again: newGame,
+    'tut-next'() {
+      tutorial.step += 1;
+      render();
+    },
+    'tut-continue'() {
+      tutorial = null;
+      mode = 'ai';
+      render();
+      runOpponent();
+    },
+    'tut-ai'() {
+      settings.mode = 'ai';
+      startMode('ai');
+    },
+    again() {
+      startMode(mode);
+    },
     menu() {
+      clearTimeout(aiTimer);
       game = null;
+      tutorial = null;
       render();
     },
   };
 
   app.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
-    if (el && handlers[el.dataset.action]) return handlers[el.dataset.action](el);
+    if (el && handlers[el.dataset.action]) {
+      if (PLAYER_ACTIONS.has(el.dataset.action) && !humanTurn()) return;
+      return handlers[el.dataset.action](el);
+    }
     if (!el && selected && !e.target.closest('input, label')) {
       selected = null;
       render();
     }
+  });
+
+  app.addEventListener('change', (e) => {
+    if (e.target.name !== 'mode') return;
+    readSetup();
+    settings.mode = e.target.value;
+    render();
   });
 
   document.addEventListener('keydown', (e) => {
@@ -432,14 +573,17 @@
 
   // 預覽環境更新頁面時保留對局（一般瀏覽器中沒有作用）
   const hot = window.claude && window.claude.hot;
-  if (hot && hot.snapshot) hot.snapshot(() => ({ game, settings, handoff }));
+  if (hot && hot.snapshot) hot.snapshot(() => ({ game, mode, tutorial, settings, handoff }));
   function boot(data) {
-    if (data && data.settings) settings = data.settings;
+    if (data && data.settings) settings = Object.assign(settings, data.settings);
     if (data && data.game) {
       game = data.game;
+      mode = data.mode || 'hotseat';
+      tutorial = data.tutorial || null;
       handoff = !!data.handoff;
     }
     render();
+    if (game) runOpponent();
   }
   if (hot && hot.ready) hot.ready(boot);
   else boot((hot && hot.data) || {});
