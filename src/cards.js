@@ -13,6 +13,8 @@
 //   resonance 這張卡的共鳴門檻，例如 { fire: 2 }（效果與電腦玩家都讀這個數字）
 //   costMod   (player) => 費用增減
 //   onPlay    (g, ctx) => 打出時的效果（登場 / 法術）
+//   attackBonus ({ guard }) => 攻擊隨從時額外加的攻擊（guard：對方是否有守護）
+//   trampleMultiplier 穿透傷害的倍率
 //   deathrattle (g, ctx) => 遺言效果
 //
 // ctx 內容：player（出牌者編號）、minion（剛上場的隨從）、lane（路線）、
@@ -164,6 +166,58 @@
       },
     },
 
+    // ── 熔岩重裝（火 + 土）──
+    {
+      id: 'magma_lizard', name: '岩漿蜥蜴', element: 'fire', type: 'minion', cost: 2, atk: 2, hp: 3,
+      guardBonus: 2,
+      text: '攻擊有守護的隨從時，攻擊 +2',
+      attackBonus({ guard }) {
+        return guard ? this.guardBonus : 0;
+      },
+    },
+    {
+      id: 'shield_breaker', name: '碎盾重擊', element: 'fire', type: 'spell', cost: 2, target: 'enemyMinion',
+      amount: 1,
+      text: '移除一隻敵方隨從的守護，並造成 1 點傷害',
+      onPlay(g, ctx) {
+        g.removeKeyword(g.minionOf(ctx.target), 'guard');
+        g.damage(ctx.target, this.amount);
+      },
+    },
+    {
+      id: 'magma_core_guard', name: '熔核守衛', element: 'earth', type: 'minion', cost: 3, atk: 2, hp: 5,
+      keywords: ['guard'], resonance: { fire: 3 },
+      text: '守護。共鳴 火 3 登場：攻擊 +2',
+      onPlay(g, ctx) {
+        if (g.resonance(ctx.player, 'fire') >= this.resonance.fire) g.buff(g.ref(ctx.minion), 2, 0);
+      },
+    },
+    {
+      id: 'earth_tremor', name: '地脈震擊', element: 'earth', type: 'spell', cost: 3, target: 'enemyMinion', resonance: { earth: 3 },
+      text: '選一隻敵方隨從，對牠那一路所有敵方隨從造成 2 點傷害。共鳴 土 3：改為 3 點',
+      onPlay(g, ctx) {
+        const { lane, owner } = g.locate(ctx.target);
+        const n = g.resonance(ctx.player, 'earth') >= this.resonance.earth ? 3 : 2;
+        for (const m of g.laneMinions(owner, lane)) g.damage(g.ref(m), n);
+      },
+    },
+    {
+      id: 'volcano_heart', name: '火山之心', element: 'earth', type: 'minion', cost: 5, atk: 3, hp: 5,
+      amount: 1,
+      text: '登場：本回合所有友方隨從 +1 攻擊',
+      onPlay(g, ctx) {
+        for (const m of g.allMinions(ctx.player)) g.tempBuff(m, this.amount);
+      },
+    },
+    {
+      id: 'lava_colossus', name: '熔岩巨像', element: 'fire', type: 'minion', cost: 7, atk: 5, hp: 6, resonance: { fire: 3 },
+      trampleMultiplier: 2,
+      text: '穿透傷害加倍。共鳴 火 3：費用 -2',
+      costMod(player) {
+        return player.resonance.fire >= this.resonance.fire ? -2 : 0;
+      },
+    },
+
     // ── 中立 ──
     { id: 'recruit', name: '新兵', element: 'neutral', type: 'minion', cost: 1, atk: 1, hp: 2, text: '' },
     { id: 'mercenary', name: '傭兵劍士', element: 'neutral', type: 'minion', cost: 2, atk: 2, hp: 3, text: '' },
@@ -193,6 +247,12 @@
       desc: '水 + 土｜控制',
       cards: ['tide_apprentice', 'frost_arrow', 'deep_watcher', 'wave_priest', 'stone_sentry',
         'earth_shield', 'rock_golem', 'mountain_turtle', 'mercenary', 'ancient_guard'],
+    },
+    magma: {
+      name: '熔岩重裝',
+      desc: '火 + 土｜中速、破守護',
+      cards: ['magma_lizard', 'shield_breaker', 'magma_core_guard', 'earth_tremor', 'volcano_heart',
+        'lava_colossus', 'stone_sentry', 'lava_hound', 'blaze_giant', 'rock_golem'],
     },
   };
   for (const d of Object.values(DECKS)) d.cards = d.cards.flatMap((id) => [id, id]);

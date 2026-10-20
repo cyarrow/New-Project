@@ -35,10 +35,10 @@ function pass(s) {
   return toMain(act(s, { type: 'endTurn' }));
 }
 
-test('開局：先手 3+1 張、後手 4 張，雙方 25 血，第一回合自動有 1 費', () => {
+test('開局：先手 3+1 張、後手 3 張，雙方 25 血，第一回合自動有 1 費', () => {
   const s = G.createGame({ seed: 42 });
   assert.equal(s.players[0].hand.length, 4);
-  assert.equal(s.players[1].hand.length, 4);
+  assert.equal(s.players[1].hand.length, 3);
   assert.equal(s.players[0].deck.length + s.players[0].hand.length, 20);
   assert.equal(s.players[0].hp, 25);
   assert.equal(s.players[0].maxMana, 1);
@@ -362,4 +362,76 @@ test('隨機對局可以順利打完（不會卡住或出錯）', () => {
     }
     assert.equal(s.phase, 'over', `seed ${seed} 沒有打完`);
   }
+});
+
+// ── 熔岩重裝 ──
+
+test('岩漿蜥蜴：攻擊守護隨從時攻擊 +2', () => {
+  let s = toMain(setup({ hands: [['magma_lizard'], ['stone_sentry']] }));
+  s = play(s, 'magma_lizard', { lane: 0 });
+  s = pass(s);
+  s = play(s, 'stone_sentry', { lane: 0 });
+  s = pass(s);
+  const hp = s.players[1].hp;
+  s = act(s, { type: 'attack', uid: s.players[0].lanes[0][0].uid, target: ref(s.players[1].lanes[0][0]) });
+  assert.equal(s.players[1].lanes[0].length, 0, '4 點打死 1/3 的哨兵');
+  assert.equal(s.players[1].hp, hp - 1, '多出 1 點穿透');
+});
+
+test('碎盾重擊：移除守護並造成 1 點傷害', () => {
+  let s = toMain(setup({ hands: [['shield_breaker'], ['rock_golem']] }));
+  s = pass(s);
+  s = play(s, 'rock_golem', { lane: 1 });
+  s = pass(s);
+  s = play(s, 'shield_breaker', { target: ref(s.players[1].lanes[1][0]) });
+  const golem = s.players[1].lanes[1][0];
+  assert.equal(golem.hp, 5);
+  assert.ok(!G.hasKeyword(golem, 'guard'));
+});
+
+test('熔核守衛：火共鳴 3 時登場攻擊 +2', () => {
+  let s = toMain(setup({ hands: [['magma_core_guard', 'magma_core_guard'], []] }));
+  s = play(s, 'magma_core_guard', { lane: 0 });
+  s.players[0].resonance.fire = 3;
+  s = play(s, 'magma_core_guard', { lane: 1 });
+  assert.equal(s.players[0].lanes[0][0].atk, 2);
+  assert.equal(s.players[0].lanes[1][0].atk, 4);
+});
+
+test('地脈震擊：對目標那一路所有敵方隨從造成傷害，土共鳴 3 時改為 3 點', () => {
+  let s = toMain(setup({ hands: [['earth_tremor', 'earth_tremor'], ['mercenary', 'ancient_guard', 'recruit']] }));
+  s = pass(s);
+  s = play(s, 'mercenary', { lane: 2 });
+  s = play(s, 'ancient_guard', { lane: 2 });
+  s = play(s, 'recruit', { lane: 0 });
+  s = pass(s);
+  s = play(s, 'earth_tremor', { target: ref(s.players[1].lanes[2][0]) });
+  assert.deepEqual(s.players[1].lanes[2].map((m) => m.hp), [1, 2]);
+  assert.equal(s.players[1].lanes[0][0].hp, 2, '其他路不受影響');
+  s.players[0].resonance.earth = 3;
+  s = play(s, 'earth_tremor', { target: ref(s.players[1].lanes[2][0]) });
+  assert.equal(s.players[1].lanes[2].length, 0);
+});
+
+test('火山之心：本回合所有友方隨從 +1 攻擊', () => {
+  let s = toMain(setup({ hands: [['recruit', 'volcano_heart'], []] }));
+  s = play(s, 'recruit', { lane: 0 });
+  s = play(s, 'volcano_heart', { lane: 1 });
+  assert.equal(G.attackOf(s.players[0].lanes[0][0]), 2);
+  s = act(s, { type: 'endTurn' });
+  assert.equal(G.attackOf(G.findMinion(s, s.players[0].lanes[0][0].uid).minion), 1);
+});
+
+test('熔岩巨像：穿透傷害加倍，火共鳴 3 時費用 -2', () => {
+  let s = toMain(setup({ hands: [['lava_colossus'], ['recruit']] }));
+  assert.equal(G.getCost(s.players[0], 'lava_colossus'), 7);
+  s.players[0].resonance.fire = 3;
+  assert.equal(G.getCost(s.players[0], 'lava_colossus'), 5);
+  s = play(s, 'lava_colossus', { lane: 0 });
+  s = pass(s);
+  s = play(s, 'recruit', { lane: 0 });
+  s = pass(s);
+  const hp = s.players[1].hp;
+  s = act(s, { type: 'attack', uid: s.players[0].lanes[0][0].uid, target: ref(s.players[1].lanes[0][0]) });
+  assert.equal(s.players[1].hp, hp - 6, '5 攻打 2 血，多 3 點，加倍成 6');
 });

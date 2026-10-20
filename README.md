@@ -56,4 +56,5 @@ npm test
 ```sh
 npm run simulate      # 勝率、對局長度、成長選擇比例、卡牌使用率
 npm run experiment    # 比較不同規則數值
+npm run matchups      # 所有牌組兩兩對打的勝率表
 ```

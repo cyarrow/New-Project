@@ -12,7 +12,7 @@
     laneCount: 3,
     laneSize: 2,
     handLimit: 8,
-    startHand: [3, 4],
+    startHand: [3, 3],
     startMana: [0, 1], // 後手補償：起始費用上限 1
     moveCost: 1,
     studyDraw: 1,
@@ -153,6 +153,7 @@
       ref: (m) => ({ kind: 'minion', uid: m.uid }),
       heroRef: (p) => ({ kind: 'hero', player: p }),
       minionOf: (ref) => (ref.kind === 'minion' ? findMinion(s, ref.uid)?.minion : null),
+      locate: (ref) => findMinion(s, ref.uid),
       resonance: (p, el) => s.players[p].resonance[el],
       laneMinions: (p, lane) => s.players[p].lanes[lane].slice(),
       allMinions: (p) => s.players[p].lanes.flat(),
@@ -163,6 +164,11 @@
         if (!m || m.keywords.includes(kw)) return;
         m.keywords.push(kw);
         if (kw === 'charge') m.sleeping = false;
+      },
+      removeKeyword(m, kw) {
+        if (!m) return;
+        m.keywords = m.keywords.filter((k) => k !== kw);
+        m.tempKeywords = m.tempKeywords.filter((k) => k !== kw);
       },
       buff(ref, atk, hp) {
         const found = ref.kind === 'minion' && findMinion(s, ref.uid);
@@ -463,8 +469,12 @@
         } else {
           const defender = findMinion(s, action.target.uid).minion;
           const back = attackOf(defender);
-          const excess = attackOf(attacker) - Math.max(0, defender.hp);
-          damage(s, action.target, attackOf(attacker));
+          const def = CARDS[attacker.cardId];
+          // 卡牌可以有攻擊加成（例如對守護隨從）和穿透倍率
+          const bonus = def.attackBonus ? def.attackBonus({ guard: hasKeyword(defender, 'guard') }) : 0;
+          const hit = attackOf(attacker) + bonus;
+          const excess = (hit - Math.max(0, defender.hp)) * (def.trampleMultiplier || 1);
+          damage(s, action.target, hit);
           attacker.hp -= back;
           if (RULES.trample && excess > 0) {
             damage(s, { kind: 'hero', player: 1 - me }, excess);
